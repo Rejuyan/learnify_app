@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show BuildContext;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -30,6 +31,12 @@ class CertificatePdfService {
 
     final filename =
         'Learnify_${courseTitle.replaceAll(RegExp(r'[^\w]'), '_')}_Certificate.pdf';
+
+    if (kIsWeb) {
+      await Printing.sharePdf(bytes: bytes, filename: filename);
+      return filename;
+    }
+
     final savePath = await _resolveSavePath(filename);
 
     final file = File(savePath);
@@ -66,17 +73,21 @@ class CertificatePdfService {
       if (await publicDownloads.exists()) {
         dir = publicDownloads;
       } else {
-        dir = (await getExternalStorageDirectory()) ??
+        dir =
+            (await getExternalStorageDirectory()) ??
             await getApplicationDocumentsDirectory();
       }
     } else if (Platform.isIOS) {
       dir = await getApplicationDocumentsDirectory();
     } else {
-      dir = (await getDownloadsDirectory()) ??
+      dir =
+          (await getDownloadsDirectory()) ??
           await getApplicationDocumentsDirectory();
     }
     return '${dir.path}/$filename';
   }
+
+
 
   // ─── PDF bytes builder ──────────────────────────────────────────────────────
   static Future<Uint8List> _buildBytes({
@@ -91,11 +102,10 @@ class CertificatePdfService {
         : 100;
 
     // ── Fonts ─────────────────────────────────────────────────────────────
-    final merriweatherBold = await PdfGoogleFonts.merriweatherBold();
-    final merriweatherItalic = await PdfGoogleFonts.merriweatherItalic();
-    final latoRegular = await PdfGoogleFonts.latoRegular();
-    final latoBold = await PdfGoogleFonts.latoBold();
-    final latoLight = await PdfGoogleFonts.latoLight();
+    final poppinsBold = await PdfGoogleFonts.poppinsBold();
+    final poppinsItalic = await PdfGoogleFonts.poppinsItalic();
+    final poppinsRegular = await PdfGoogleFonts.poppinsRegular();
+    final poppinsLight = await PdfGoogleFonts.poppinsLight();
     // Dancing Script for the signature
     final dancingScript = await PdfGoogleFonts.dancingScriptBold();
 
@@ -111,12 +121,13 @@ class CertificatePdfService {
           score: score,
           total: totalQuestions,
           earnedDate: earnedDate,
-          merriweatherBold: merriweatherBold,
-          merriweatherItalic: merriweatherItalic,
-          latoRegular: latoRegular,
-          latoBold: latoBold,
-          latoLight: latoLight,
+          merriweatherBold: poppinsBold,
+          merriweatherItalic: poppinsItalic,
+          latoRegular: poppinsRegular,
+          latoBold: poppinsBold,
+          latoLight: poppinsLight,
           dancingScript: dancingScript,
+          banglaFont: poppinsBold,
         ),
       ),
     );
@@ -137,20 +148,21 @@ class CertificatePdfService {
     required pw.Font latoBold,
     required pw.Font latoLight,
     required pw.Font dancingScript,
+    required pw.Font banglaFont,
   }) {
     // ── Palette (light, professional, Udemy/Coursera-style) ──────────────
     const bgColor = PdfColors.white;
-    const navy = PdfColor.fromInt(0xFF1B2B4B);       // Deep navy — primary
-    const navyMid = PdfColor.fromInt(0xFF2D4270);    // Medium navy
-    const gold = PdfColor.fromInt(0xFFB8870B);       // Rich gold
-    const goldLight = PdfColor.fromInt(0xFFD4A01A);  // Lighter gold
-    const goldBand = PdfColor.fromInt(0xFFEEC900);   // Top/bottom band gold
-    const cream = PdfColor.fromInt(0xFFF7F3E8);      // Warm cream tint
-    const textDark = PdfColor.fromInt(0xFF1A1A2E);   // Near black
-    const textMid = PdfColor.fromInt(0xFF4A5568);    // Mid grey
-    const textLight = PdfColor.fromInt(0xFF718096);  // Light grey
+    const navy = PdfColor.fromInt(0xFF1B2B4B); // Deep navy — primary
+    const navyMid = PdfColor.fromInt(0xFF2D4270); // Medium navy
+    const gold = PdfColor.fromInt(0xFFB8870B); // Rich gold
+    const goldLight = PdfColor.fromInt(0xFFD4A01A); // Lighter gold
+    const goldBand = PdfColor.fromInt(0xFFEEC900); // Top/bottom band gold
+    const cream = PdfColor.fromInt(0xFFF7F3E8); // Warm cream tint
+    const textDark = PdfColor.fromInt(0xFF1A1A2E); // Near black
+    const textMid = PdfColor.fromInt(0xFF4A5568); // Mid grey
+    const textLight = PdfColor.fromInt(0xFF718096); // Light grey
     const dividerColor = PdfColor.fromInt(0xFFD6C48A); // Gold divider
-    const accentBlue = PdfColor.fromInt(0xFF3B5998);  // Deep blue accent
+    const accentBlue = PdfColor.fromInt(0xFF3B5998); // Deep blue accent
 
     return pw.Container(
       color: bgColor,
@@ -158,34 +170,39 @@ class CertificatePdfService {
         children: [
           // ── Cream background tint (left 30%) ────────────────────────────
           pw.Positioned(
-            left: 0, top: 0, bottom: 0,
-            child: pw.Container(
-              width: 238,
-              color: cream,
-            ),
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: pw.Container(width: 238, color: cream),
           ),
 
           // ── Top gold accent band ─────────────────────────────────────────
           pw.Positioned(
-            top: 0, left: 0, right: 0,
+            top: 0,
+            left: 0,
+            right: 0,
             child: pw.Container(height: 8, color: goldBand),
           ),
           // ── Bottom navy band ─────────────────────────────────────────────
           pw.Positioned(
-            bottom: 0, left: 0, right: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
             child: pw.Container(height: 8, color: navy),
           ),
 
           // ── Left sidebar ─────────────────────────────────────────────────
           pw.Positioned(
-            left: 0, top: 8, bottom: 8,
-            child: pw.Container(
-              width: 8, color: navy,
-            ),
+            left: 0,
+            top: 8,
+            bottom: 8,
+            child: pw.Container(width: 8, color: navy),
           ),
           // ── Right sidebar ────────────────────────────────────────────────
           pw.Positioned(
-            right: 0, top: 8, bottom: 8,
+            right: 0,
+            top: 8,
+            bottom: 8,
             child: pw.Container(width: 8, color: navy),
           ),
 
@@ -203,155 +220,165 @@ class CertificatePdfService {
 
           // ── Left panel content ───────────────────────────────────────────
           pw.Positioned(
-            left: 18, top: 18, bottom: 18,
+            left: 18,
+            top: 18,
+            bottom: 18,
             child: pw.SizedBox(
               width: 210,
               child: pw.Padding(
-              padding: const pw.EdgeInsets.fromLTRB(20, 24, 16, 20),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.center,
-                children: [
-                  // Seal circle
-                  pw.Container(
-                    width: 88, height: 88,
-                    decoration: pw.BoxDecoration(
-                      shape: pw.BoxShape.circle,
-                      border: pw.Border.all(color: gold, width: 2.5),
+                padding: const pw.EdgeInsets.fromLTRB(20, 24, 16, 20),
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  children: [
+                    // Seal circle
+                    pw.Container(
+                      width: 88,
+                      height: 88,
+                      decoration: pw.BoxDecoration(
+                        shape: pw.BoxShape.circle,
+                        border: pw.Border.all(color: gold, width: 2.5),
+                      ),
+                      child: pw.Center(
+                        child: pw.Column(
+                          mainAxisAlignment: pw.MainAxisAlignment.center,
+                          children: [
+                            pw.Text(
+                              'L',
+                              style: pw.TextStyle(
+                                font: merriweatherBold,
+                                fontSize: 34,
+                                color: navy,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    child: pw.Center(
+                    pw.SizedBox(height: 8),
+                    pw.Text(
+                      'LEARNIFY',
+                      style: pw.TextStyle(
+                        font: latoBold,
+                        fontSize: 11,
+                        color: navy,
+                        letterSpacing: 3.5,
+                      ),
+                    ),
+                    pw.Text(
+                      'ACADEMY',
+                      style: pw.TextStyle(
+                        font: latoRegular,
+                        fontSize: 7,
+                        color: textMid,
+                        letterSpacing: 2.5,
+                      ),
+                    ),
+
+                    pw.SizedBox(height: 20),
+                    pw.Container(height: 0.8, color: dividerColor),
+                    pw.SizedBox(height: 20),
+
+                    // Score block
+                    pw.Container(
+                      width: double.infinity,
+                      padding: const pw.EdgeInsets.all(12),
+                      decoration: pw.BoxDecoration(
+                        color: navy,
+                        borderRadius: const pw.BorderRadius.all(
+                          pw.Radius.circular(6),
+                        ),
+                      ),
                       child: pw.Column(
-                        mainAxisAlignment: pw.MainAxisAlignment.center,
                         children: [
                           pw.Text(
-                            'L',
+                            '$efficiency%',
                             style: pw.TextStyle(
                               font: merriweatherBold,
-                              fontSize: 34,
-                              color: navy,
+                              fontSize: 32,
+                              color: goldBand,
+                            ),
+                          ),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            'EFFICIENCY SCORE',
+                            style: pw.TextStyle(
+                              font: latoBold,
+                              fontSize: 6,
+                              color: PdfColors.white,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                          pw.SizedBox(height: 4),
+                          pw.Text(
+                            '$score of $total correct',
+                            style: pw.TextStyle(
+                              font: latoLight,
+                              fontSize: 8,
+                              color: const PdfColor.fromInt(0xFFBBCCEE),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  pw.SizedBox(height: 8),
-                  pw.Text(
-                    'LEARNIFY',
-                    style: pw.TextStyle(
-                      font: latoBold,
-                      fontSize: 11,
-                      color: navy,
-                      letterSpacing: 3.5,
-                    ),
-                  ),
-                  pw.Text(
-                    'ACADEMY',
-                    style: pw.TextStyle(
-                      font: latoRegular,
-                      fontSize: 7,
-                      color: textMid,
-                      letterSpacing: 2.5,
-                    ),
-                  ),
 
-                  pw.SizedBox(height: 20),
-                  pw.Container(height: 0.8, color: dividerColor),
-                  pw.SizedBox(height: 20),
+                    pw.SizedBox(height: 16),
+                    pw.Container(height: 0.8, color: dividerColor),
+                    pw.SizedBox(height: 14),
 
-                  // Score block
-                  pw.Container(
-                    width: double.infinity,
-                    padding: const pw.EdgeInsets.all(12),
-                    decoration: pw.BoxDecoration(
-                      color: navy,
-                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(6)),
+                    // Date block
+                    pw.Text(
+                      'DATE OF COMPLETION',
+                      style: pw.TextStyle(
+                        font: latoBold,
+                        fontSize: 6,
+                        color: textLight,
+                        letterSpacing: 1.5,
+                      ),
                     ),
-                    child: pw.Column(
-                      children: [
-                        pw.Text(
-                          '$efficiency%',
-                          style: pw.TextStyle(
-                            font: merriweatherBold,
-                            fontSize: 32,
-                            color: goldBand,
-                          ),
-                        ),
-                        pw.SizedBox(height: 2),
-                        pw.Text(
-                          'EFFICIENCY SCORE',
-                          style: pw.TextStyle(
-                            font: latoBold,
-                            fontSize: 6,
-                            color: PdfColors.white,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                        pw.SizedBox(height: 4),
-                        pw.Text(
-                          '$score of $total correct',
-                          style: pw.TextStyle(
-                            font: latoLight,
-                            fontSize: 8,
-                            color: const PdfColor.fromInt(0xFFBBCCEE),
-                          ),
-                        ),
-                      ],
+                    pw.SizedBox(height: 5),
+                    pw.Text(
+                      earnedDate,
+                      style: pw.TextStyle(
+                        font: merriweatherBold,
+                        fontSize: 10,
+                        color: textDark,
+                      ),
+                      textAlign: pw.TextAlign.center,
                     ),
-                  ),
 
-                  pw.SizedBox(height: 16),
-                  pw.Container(height: 0.8, color: dividerColor),
-                  pw.SizedBox(height: 14),
+                    pw.Spacer(),
 
-                  // Date block
-                  pw.Text(
-                    'DATE OF COMPLETION',
-                    style: pw.TextStyle(
-                      font: latoBold,
-                      fontSize: 6,
-                      color: textLight,
-                      letterSpacing: 1.5,
+                    // Bottom verification note
+                    pw.Text(
+                      'This certificate verifies the\ncompletion of an online course\non the Learnify platform.',
+                      style: pw.TextStyle(
+                        font: latoLight,
+                        fontSize: 7,
+                        color: textLight,
+                        lineSpacing: 2,
+                      ),
+                      textAlign: pw.TextAlign.center,
                     ),
-                  ),
-                  pw.SizedBox(height: 5),
-                  pw.Text(
-                    earnedDate,
-                    style: pw.TextStyle(
-                      font: merriweatherBold,
-                      fontSize: 10,
-                      color: textDark,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-
-                  pw.Spacer(),
-
-                  // Bottom verification note
-                  pw.Text(
-                    'This certificate verifies the\ncompletion of an online course\non the Learnify platform.',
-                    style: pw.TextStyle(
-                      font: latoLight,
-                      fontSize: 7,
-                      color: textLight,
-                      lineSpacing: 2,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
             ),
           ),
 
           // ── Vertical divider between panels ─────────────────────────────
           pw.Positioned(
-            left: 228, top: 18, bottom: 18,
+            left: 228,
+            top: 18,
+            bottom: 18,
             child: pw.Container(width: 1, color: dividerColor),
           ),
 
           // ── Right panel content ──────────────────────────────────────────
           pw.Positioned(
-            left: 240, right: 18, top: 18, bottom: 18,
+            left: 240,
+            right: 18,
+            top: 18,
+            bottom: 18,
             child: pw.Padding(
               padding: const pw.EdgeInsets.fromLTRB(32, 28, 32, 24),
               child: pw.Column(
@@ -362,10 +389,7 @@ class CertificatePdfService {
                   pw.Row(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      pw.Container(
-                        width: 3, height: 28,
-                        color: goldLight,
-                      ),
+                      pw.Container(width: 3, height: 28, color: goldLight),
                       pw.SizedBox(width: 10),
                       pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -406,14 +430,12 @@ class CertificatePdfService {
                   ),
                   pw.SizedBox(height: 6),
 
-                  // Student name — the centerpiece
                   pw.Text(
                     studentName,
                     style: pw.TextStyle(
-                      font: merriweatherBold,
-                      fontSize: 36,
+                      font: banglaFont,
+                      fontSize: 32,
                       color: navy,
-                      fontStyle: pw.FontStyle.italic,
                     ),
                   ),
                   pw.SizedBox(height: 4),
@@ -442,25 +464,27 @@ class CertificatePdfService {
 
                   // Course title box
                   pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     decoration: pw.BoxDecoration(
                       color: const PdfColor.fromInt(0xFFF0F4FF),
-                      borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                      borderRadius: const pw.BorderRadius.all(
+                        pw.Radius.circular(4),
+                      ),
                       border: pw.Border.all(color: accentBlue, width: 0.5),
                     ),
                     child: pw.Row(
                       children: [
-                        pw.Container(
-                          width: 3, height: 28,
-                          color: accentBlue,
-                        ),
+                        pw.Container(width: 3, height: 28, color: accentBlue),
                         pw.SizedBox(width: 10),
                         pw.Expanded(
                           child: pw.Text(
                             courseTitle,
                             style: pw.TextStyle(
-                              font: merriweatherBold,
-                              fontSize: 15,
+                              font: banglaFont,
+                              fontSize: 14,
                               color: navyMid,
                             ),
                           ),
@@ -474,14 +498,26 @@ class CertificatePdfService {
                   // Achievement summary
                   pw.Row(
                     children: [
-                      _pill('SCORE  $score / $total', latoBold, gold,
-                          const PdfColor.fromInt(0xFFFDF6E3)),
+                      _pill(
+                        'SCORE  $score / $total',
+                        latoBold,
+                        gold,
+                        const PdfColor.fromInt(0xFFFDF6E3),
+                      ),
                       pw.SizedBox(width: 8),
-                      _pill('EFFICIENCY  $efficiency%', latoBold, accentBlue,
-                          const PdfColor.fromInt(0xFFF0F4FF)),
+                      _pill(
+                        'EFFICIENCY  $efficiency%',
+                        latoBold,
+                        accentBlue,
+                        const PdfColor.fromInt(0xFFF0F4FF),
+                      ),
                       pw.SizedBox(width: 8),
-                      _pill('PASSING GRADE  60%+', latoRegular, textMid,
-                          const PdfColor.fromInt(0xFFF7F7F7)),
+                      _pill(
+                        'PASSING GRADE  60%+',
+                        latoRegular,
+                        textMid,
+                        const PdfColor.fromInt(0xFFF7F7F7),
+                      ),
                     ],
                   ),
 
@@ -511,7 +547,9 @@ class CertificatePdfService {
                           ),
                           pw.SizedBox(height: 3),
                           pw.Container(
-                            width: 160, height: 0.8, color: textLight,
+                            width: 160,
+                            height: 0.8,
+                            color: textLight,
                           ),
                           pw.SizedBox(height: 4),
                           pw.Text(

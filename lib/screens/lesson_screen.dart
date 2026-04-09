@@ -139,11 +139,11 @@ class _LessonScreenState extends State<LessonScreen>
     _checkCompletion();
   }
 
-  bool get _allQuizzesPassed {
+  bool get _allQuizzesAttempted {
     final lesson = widget.course.lessons[_currentIndex];
     if (lesson.quizzes == null || lesson.quizzes!.isEmpty) return true;
     for (int i = 0; i < lesson.quizzes!.length; i++) {
-      if (_selectedOptions[i] != lesson.quizzes![i].correctIndex) return false;
+      if (_selectedOptions[i] == null) return false;
     }
     return true;
   }
@@ -304,6 +304,22 @@ class _LessonScreenState extends State<LessonScreen>
                         if (_isCompleted) {
                           await _markIncomplete();
                         } else {
+                          // Require logged in session
+                          if (AuthService().currentUser == null) {
+                            await Navigator.push(context,
+                                MaterialPageRoute(builder: (_) => const LoginScreen()));
+                            return;
+                          }
+                           // Enforce quiz completion
+                          if (!_allQuizzesAttempted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please answer all quiz questions before completing this lesson.'),
+                                backgroundColor: AppTheme.errorRed,
+                              ),
+                            );
+                            return;
+                          }
                           await _markComplete();
                         }
                       },
@@ -490,10 +506,10 @@ class _LessonScreenState extends State<LessonScreen>
                                     MaterialPageRoute(builder: (_) => const LoginScreen()));
                                 return;
                               }
-                              if (!_allQuizzesPassed) {
+                              if (!_allQuizzesAttempted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Answer all quiz questions correctly to proceed.'),
+                                    content: Text('Please answer all quiz questions before proceeding.'),
                                     backgroundColor: AppTheme.errorRed,
                                   ),
                                 );
@@ -501,8 +517,7 @@ class _LessonScreenState extends State<LessonScreen>
                               }
                               await _markComplete();
                             }
-                            if (!mounted) return;
-                            // ignore: use_build_context_synchronously
+                            if (!context.mounted) return;
                             if (_currentIndex < totalLessons - 1) {
                               _goToLesson(_currentIndex + 1);
                             } else {

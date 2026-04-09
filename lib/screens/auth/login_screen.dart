@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import '../../services/auth_service.dart';
+import '../../services/local_data_service.dart';
 import '../../theme/app_theme.dart';
 import 'register_screen.dart';
 import '../home_screen.dart';
+import '../admin/admin_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,9 +43,18 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (credential?.user != null) {
-        // Navigate to HomeScreen, clearing the entire back stack
+        await LocalDataService().syncWithCloud();
+        
+        if (!mounted) return;
+
+        Widget nextScreen = const HomeScreen();
+        if (credential?.user?.email == 'admin@learnify.com') {
+          nextScreen = const AdminDashboardScreen();
+        }
+
+        // Navigate to the dashboard, clearing the entire back stack
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          MaterialPageRoute(builder: (_) => nextScreen),
           (route) => false,
         );
       }
@@ -73,10 +85,22 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SizedBox(height: 40),
-              const Icon(Icons.lock_person_rounded,
-                  size: 80, color: AppTheme.primaryPurple),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
+              Center(
+                child: SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: Lottie.network(
+                    'https://assets9.lottiefiles.com/packages/lf20_m5al1gqg.json',
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(Icons.lock_person_rounded,
+                          size: 80, color: AppTheme.primaryPurple);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               const Text('Welcome Back',
                   style: TextStyle(
                       fontSize: 28, fontWeight: FontWeight.bold,

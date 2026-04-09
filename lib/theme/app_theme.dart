@@ -11,7 +11,7 @@ class AppTheme {
   static const Color accentYellow = Color(0xFFFFD93D);
   static const Color accentCoral = Color(0xFFFF6B6B);
 
-  static const Color backgroundLight = Color(0xFFF6F5FC);
+  static const Color backgroundLight = Color(0xFFF5F3FC);
   static const Color backgroundWhite = Color(0xFFFFFFFF);
   static const Color surfaceCard = Color(0xFFFFFFFF);
 

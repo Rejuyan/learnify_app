@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import 'home_screen.dart';
-import 'auth/login_screen.dart';
+import 'landing_screen.dart';
+import 'admin/admin_dashboard_screen.dart';
 import '../services/auth_service.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -55,9 +57,17 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   void _navigateToNext() {
     if (!mounted) return;
     final user = AuthService().currentUser;
+    Widget nextScreen = const LandingScreen();
+    if (user != null) {
+      if (user.email == 'admin@learnify.com') {
+        nextScreen = const AdminDashboardScreen();
+      } else {
+        nextScreen = const HomeScreen();
+      }
+    }
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => user != null ? const HomeScreen() : const LoginScreen(),
+        builder: (_) => nextScreen,
       ),
     );
   }
@@ -101,7 +111,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     child: FadeTransition(
                       opacity: _logoFade,
                       child: Container(
-                        padding: const EdgeInsets.all(24),
+                        width: 150,
+                        height: 150,
                         decoration: BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
@@ -112,8 +123,16 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                             ),
                           ],
                         ),
-                        child: const Icon(Icons.school_rounded,
-                            size: 80, color: Color(0xFF2575FC)),
+                        child: ClipOval(
+                          child: Lottie.network(
+                            'https://assets3.lottiefiles.com/packages/lf20_drow7d1i.json',
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Icon(Icons.school_rounded,
+                                  size: 80, color: Color(0xFF2575FC));
+                            },
+                          ),
+                        ),
                       ),
                     ),
                   ),

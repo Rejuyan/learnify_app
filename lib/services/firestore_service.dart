@@ -1,6 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'auth_service.dart';
 import 'progress_service.dart';
+import '../models/course.dart';
+import '../data/sample_data.dart';
+import '../data/courses/legacy_nctb/agriculture_course.dart';
+import '../data/courses/legacy_nctb/bangla_course.dart';
+import '../data/courses/legacy_nctb/bgs_course.dart';
+import '../data/courses/legacy_nctb/english_course.dart';
+import '../data/courses/legacy_nctb/ict_course.dart';
+import '../data/courses/legacy_nctb/islam_course.dart';
+import '../data/courses/legacy_nctb/math_course.dart';
+import '../data/courses/legacy_nctb/science_course.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
@@ -66,10 +76,17 @@ class FirestoreService {
     }, SetOptions(merge: true));
   }
 
-  Future<void> updateUserProfile({String? name}) async {
+  Future<Map<String, dynamic>?> getUserProfile() async {
+    if (_userDoc == null) return null;
+    final snap = await _userDoc!.get();
+    return snap.data();
+  }
+
+  Future<void> updateUserProfile({String? name, String? photoBase64}) async {
     if (_userDoc == null) return;
     final Map<String, dynamic> updates = {};
     if (name != null) updates['displayName'] = name;
+    if (photoBase64 != null) updates['photoBase64'] = photoBase64;
     if (updates.isNotEmpty) {
       await _userDoc!.update(updates);
     }
@@ -241,5 +258,45 @@ class FirestoreService {
     final snap = await _userDoc!.collection('notes').doc(lessonId).get();
     if (!snap.exists) return null;
     return snap.data()?['content'] as String?;
+  }
+
+  // ─── Content Migration & Dynamic Loading ────────────────────────
+  
+  Future<void> uploadSampleCoursesToFirestore() async {
+    final coursesRef = _db.collection('courses');
+    
+    // Upload active courses
+    for (final course in sampleCourses) {
+      await coursesRef.doc(course.id).set(course.toMap());
+    }
+    
+    // Upload legacy NCTB courses
+    final legacyCourses = [
+      banglaCourse,
+      englishCourse,
+      mathCourse,
+      scienceCourse,
+      ictCourse,
+      islamCourse,
+      bgsCourse,
+      agricultureCourse,
+    ];
+    for (final course in legacyCourses) {
+      await coursesRef.doc(course.id).set(course.toMap());
+    }
+  }
+
+  Future<List<Course>> fetchLiveCoursesFromFirestore() async {
+    final snap = await _db.collection('courses').get();
+    if (snap.docs.isEmpty) return [];
+    return snap.docs.map((doc) => Course.fromMap(doc.data())).toList();
+  }
+
+  Future<void> saveCourse(Course course) async {
+    await _db.collection('courses').doc(course.id).set(course.toMap());
+  }
+
+  Future<void> deleteCourse(String courseId) async {
+    await _db.collection('courses').doc(courseId).delete();
   }
 }

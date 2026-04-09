@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import '../services/local_data_service.dart';
 import '../services/auth_service.dart';
 import '../services/certificate_pdf_service.dart';
@@ -166,9 +167,19 @@ class _TrophyRoomScreenState extends State<TrophyRoomScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.emoji_events_rounded,
-                  size: 80, color: AppTheme.textMuted.withValues(alpha: 0.4)),
-              const SizedBox(height: 20),
+              SizedBox(
+                width: 180,
+                height: 180,
+                child: Lottie.network(
+                  'https://assets2.lottiefiles.com/packages/lf20_touohxv0.json',
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(Icons.emoji_events_rounded,
+                        size: 80, color: AppTheme.textMuted.withValues(alpha: 0.4));
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
               const Text(
                 'No Certificates Yet',
                 style: TextStyle(
@@ -315,7 +326,7 @@ class _DownloadButtonState extends State<_DownloadButton> {
               try {
                 await widget.onTap();
               } catch (e) {
-                if (mounted) {
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Could not generate PDF: $e'),

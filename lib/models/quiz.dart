@@ -12,4 +12,24 @@ class Quiz {
     required this.options,
     required this.correctIndex,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'courseId': courseId,
+      'question': question,
+      'options': options,
+      'correctIndex': correctIndex,
+    };
+  }
+
+  factory Quiz.fromMap(Map<String, dynamic> map) {
+    return Quiz(
+      id: map['id'] as String? ?? '',
+      courseId: map['courseId'] as String? ?? '',
+      question: map['question'] as String? ?? '',
+      options: List<String>.from(map['options'] ?? []),
+      correctIndex: map['correctIndex'] as int? ?? 0,
+    );
+  }
 }

@@ -5,6 +5,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_service.dart';
+import 'firestore_service.dart';
 
 class LocalDataService {
   // ─── Singleton ─────────────────────────────────────────────────────────────
@@ -18,9 +20,20 @@ class LocalDataService {
   static const _enrolledKey = 'enrolled_courses';
   static const _certsKey = 'earned_certificates';
   static const _notePrefix = 'note_';
+  static const _photoKey = 'user_profile_photo_base64';
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
+
+  Future<String?> getProfilePhoto() async {
+    final p = await _prefs;
+    return p.getString(_photoKey);
+  }
+
+  Future<void> setProfilePhoto(String base64) async {
+    final p = await _prefs;
+    await p.setString(_photoKey, base64);
+  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // LESSON PROGRESS
@@ -39,6 +52,10 @@ class LocalDataService {
       list.add(lessonId);
       await p.setStringList(key, list);
     }
+    // Background cloud sync
+    if (AuthService().currentUser != null) {
+      FirestoreService().markLessonComplete(courseId, lessonId).catchError((_) {});
+    }
   }
 
   Future<void> markLessonIncomplete(String courseId, String lessonId) async {
@@ -47,6 +64,10 @@ class LocalDataService {
     final list = p.getStringList(key) ?? [];
     list.remove(lessonId);
     await p.setStringList(key, list);
+    // Background cloud sync
+    if (AuthService().currentUser != null) {
+      FirestoreService().markLessonIncomplete(courseId, lessonId).catchError((_) {});
+    }
   }
 
   Future<double> getCourseProgress(String courseId, int totalLessons) async {
@@ -76,6 +97,10 @@ class LocalDataService {
       list.add(courseId);
       await p.setStringList(_enrolledKey, list);
     }
+    // Background cloud sync
+    if (AuthService().currentUser != null) {
+      FirestoreService().enrollCourse(courseId).catchError((_) {});
+    }
   }
 
   Future<void> unenrollCourse(String courseId) async {
@@ -83,6 +108,10 @@ class LocalDataService {
     final list = p.getStringList(_enrolledKey) ?? [];
     list.remove(courseId);
     await p.setStringList(_enrolledKey, list);
+    // Background cloud sync
+    if (AuthService().currentUser != null) {
+      FirestoreService().unenrollCourse(courseId).catchError((_) {});
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -93,6 +122,10 @@ class LocalDataService {
     final p = await _prefs;
     await p.setString('$_quizPrefix$courseId',
         jsonEncode({'score': score, 'total': total}));
+    // Background cloud sync
+    if (AuthService().currentUser != null) {
+      FirestoreService().saveQuizScore(courseId, score, total).catchError((_) {});
+    }
   }
 
   Future<Map<String, int>?> getQuizScore(String courseId) async {
@@ -172,6 +205,10 @@ class LocalDataService {
       'earnedAt': DateTime.now().toIso8601String(),
     }));
     await p.setStringList(_certsKey, raw);
+    // Background cloud sync
+    if (AuthService().currentUser != null) {
+      FirestoreService().awardCertificate(courseId, courseTitle).catchError((_) {});
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -181,6 +218,10 @@ class LocalDataService {
   Future<void> saveNote(String lessonId, String note) async {
     final p = await _prefs;
     await p.setString('$_notePrefix$lessonId', note);
+    // Background cloud sync
+    if (AuthService().currentUser != null) {
+      FirestoreService().saveNote(lessonId, note).catchError((_) {});
+    }
   }
 
   Future<String?> getNote(String lessonId) async {
@@ -204,6 +245,73 @@ class LocalDataService {
         .toList();
     for (final k in keys) {
       await p.remove(k);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // CLOUD SYNCHRONIZATION
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Future<void> syncWithCloud() async {
+    if (AuthService().currentUser == null) return;
+    try {
+      final p = await _prefs;
+      final fs = FirestoreService();
+
+      // 1. Sync Enrolled Course IDs
+      final enrolledCourseIds = await fs.getEnrolledCourseIds();
+      if (enrolledCourseIds.isNotEmpty) {
+        final localEnrolled = p.getStringList(_enrolledKey) ?? [];
+        final mergedEnrolled = {...localEnrolled, ...enrolledCourseIds}.toList();
+        await p.setStringList(_enrolledKey, mergedEnrolled);
+      }
+
+      // 2. Sync Earned Certificates
+      final earnedCerts = await fs.getEarnedCertificates();
+      if (earnedCerts.isNotEmpty) {
+        final localCerts = p.getStringList(_certsKey) ?? [];
+        final localCertIds = localCerts
+            .map((e) => Map<String, dynamic>.from(jsonDecode(e))['courseId'] as String)
+            .toSet();
+        for (final cert in earnedCerts) {
+          final courseId = cert['courseId'] as String?;
+          if (courseId != null && !localCertIds.contains(courseId)) {
+            localCerts.add(jsonEncode(cert));
+          }
+        }
+        await p.setStringList(_certsKey, localCerts);
+      }
+
+      // 3. Sync Lesson Completion & Quiz Progress for Enrolled Courses
+      final enrolled = p.getStringList(_enrolledKey) ?? [];
+      for (final courseId in enrolled) {
+        // Sync Completed Lessons
+        final fsCompleted = await fs.getCompletedLessons(courseId);
+        if (fsCompleted.isNotEmpty) {
+          final key = '$_completedPrefix$courseId';
+          final localCompleted = p.getStringList(key) ?? [];
+          final mergedCompleted = {...localCompleted, ...fsCompleted}.toList();
+          await p.setStringList(key, mergedCompleted);
+        }
+
+        // Sync Quiz Score
+        final fsQuiz = await fs.getQuizScore(courseId);
+        if (fsQuiz != null) {
+          final localQuiz = await getQuizScore(courseId);
+          if (localQuiz == null || localQuiz['score'] != fsQuiz['score']) {
+            await p.setString('$_quizPrefix$courseId',
+                jsonEncode({'score': fsQuiz['score']!, 'total': fsQuiz['total']!}));
+          }
+        }
+      }
+
+      // 4. Sync User Profile Photo
+      final userDoc = await fs.getUserProfile();
+      if (userDoc != null && userDoc['photoBase64'] != null) {
+        await p.setString(_photoKey, userDoc['photoBase64'] as String);
+      }
+    } catch (e) {
+      // Fail silently in background sync
     }
   }
 }

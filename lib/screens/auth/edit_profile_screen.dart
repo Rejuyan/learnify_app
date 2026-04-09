@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
 import '../../services/auth_service.dart';
+import '../../services/local_data_service.dart';
+import '../../services/firestore_service.dart';
 import '../../theme/app_theme.dart';
 
 class EditProfileScreen extends StatefulWidget {
@@ -12,8 +16,11 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _nameController = TextEditingController();
   final _authService = AuthService();
+  final _ds = LocalDataService();
+  final _picker = ImagePicker();
   bool _isLoading = false;
   String? _errorMessage;
+  String? _photoBase64;
 
   @override
   void initState() {
@@ -23,12 +30,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (user != null && user.displayName != null) {
       _nameController.text = user.displayName!;
     }
+    _loadProfilePhoto();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadProfilePhoto() async {
+    final photo = await _ds.getProfilePhoto();
+    if (mounted) {
+      setState(() {
+        _photoBase64 = photo;
+      });
+    }
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 250,
+        maxHeight: 250,
+        imageQuality: 80,
+      );
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        setState(() {
+          _photoBase64 = base64Encode(bytes);
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Could not pick image: $e';
+      });
+    }
   }
 
   Future<void> _saveProfile() async {
@@ -46,6 +84,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       await _authService.updateDisplayName(name);
       
+      if (_photoBase64 != null) {
+        await _ds.setProfilePhoto(_photoBase64!);
+        await FirestoreService().updateUserProfile(photoBase64: _photoBase64!);
+      }
+
       if (!mounted) return;
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -88,28 +131,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 20),
-              Center(
-                child: Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundColor: AppTheme.primaryPurpleLight.withValues(alpha: 0.2),
-                      child: const Icon(Icons.person, size: 50, color: AppTheme.primaryPurple),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primaryPurple,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                        ),
-                        child: const Icon(Icons.edit, size: 16, color: Colors.white),
+               Center(
+                child: GestureDetector(
+                  onTap: _pickImage,
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 50,
+                        backgroundColor: AppTheme.primaryPurpleLight.withValues(alpha: 0.2),
+                        backgroundImage: _photoBase64 != null
+                            ? MemoryImage(base64Decode(_photoBase64!))
+                            : null,
+                        child: _photoBase64 == null
+                            ? const Icon(Icons.person, size: 50, color: AppTheme.primaryPurple)
+                            : null,
                       ),
-                    ),
-                  ],
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryPurple,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 40),

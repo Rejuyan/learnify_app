@@ -69,6 +69,8 @@ lib/
 ```
 
 ---
+Any course, lecture, or quiz you create in the React Web Admin Dashboard at http://localhost:5173/ is synced in real-time to Firebase Firestore.
+To see the updated course counts on your Flutter console screen (http://localhost:56583/), simply click the Refresh Icon in the top-right corner of the Flutter app.
 
 ## 📄 License
 

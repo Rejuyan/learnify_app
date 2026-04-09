@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 import '../models/course.dart';
 import '../services/local_data_service.dart';
 import '../theme/app_theme.dart';
@@ -242,17 +243,29 @@ class _QuizScreenState extends State<QuizScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  width: 100, height: 100,
-                  decoration: BoxDecoration(
-                    color: (isPassed ? AppTheme.successGreen : AppTheme.accentOrange)
-                        .withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    isPassed ? Icons.emoji_events_rounded : Icons.refresh_rounded,
-                    size: 48,
-                    color: isPassed ? AppTheme.successGreen : AppTheme.accentOrange,
+                SizedBox(
+                  width: 150,
+                  height: 150,
+                  child: Lottie.network(
+                    isPassed
+                        ? 'https://assets10.lottiefiles.com/packages/lf20_obh5cwy6.json'
+                        : 'https://assets8.lottiefiles.com/packages/lf20_0yfsb3a1.json',
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 100, height: 100,
+                        decoration: BoxDecoration(
+                          color: (isPassed ? AppTheme.successGreen : AppTheme.accentOrange)
+                              .withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isPassed ? Icons.emoji_events_rounded : Icons.refresh_rounded,
+                          size: 48,
+                          color: isPassed ? AppTheme.successGreen : AppTheme.accentOrange,
+                        ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 28),

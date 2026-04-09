@@ -6,6 +6,7 @@ import '../theme/app_theme.dart';
 import '../widgets/lesson_tile.dart';
 import 'lesson_screen.dart';
 import 'quiz_screen.dart';
+import '../utils/network_simulator.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final Course course;
@@ -237,24 +238,29 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
                       final lesson = widget.course.lessons[i];
                       final isCompleted = _completedLessons.contains(lesson.id);
                       final isCurrent = i == _firstIncompleteLessonIndex;
+                      final isLocked = _firstIncompleteLessonIndex != -1 && i > _firstIncompleteLessonIndex;
                       return LessonTile(
                         title: lesson.title,
                         durationMinutes: lesson.durationMinutes,
                         index: i,
                         isCompleted: isCompleted,
                         isCurrent: isCurrent,
+                        isLocked: isLocked,
                         accentColor: widget.course.color,
                         onTap: () async {
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => LessonScreen(
-                                course: widget.course,
-                                lessonIndex: i,
+                          await NetworkSimulator.delay(context);
+                          if (mounted) {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => LessonScreen(
+                                  course: widget.course,
+                                  lessonIndex: i,
+                                ),
                               ),
-                            ),
-                          );
-                          _loadProgress();
+                            );
+                            _loadProgress();
+                          }
                         },
                       );
                     }),
@@ -299,16 +305,19 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
                         final lessonIndex = _firstIncompleteLessonIndex >= 0
                             ? _firstIncompleteLessonIndex
                             : 0;
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => LessonScreen(
-                              course: widget.course,
-                              lessonIndex: lessonIndex,
+                        await NetworkSimulator.delay(context);
+                        if (mounted) {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => LessonScreen(
+                                course: widget.course,
+                                lessonIndex: lessonIndex,
+                              ),
                             ),
-                          ),
-                        );
-                        _loadProgress();
+                          );
+                          _loadProgress();
+                        }
                       },
                       child: Text(
                         _completedLessons.isEmpty
@@ -346,61 +355,99 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
 
   Widget _buildQuizCard() {
     final hasTaken = _quizScore != null;
+    final lessonsFinished = _completedLessons.length >= widget.course.lessons.length;
+    final isLocked = !lessonsFinished;
+
     return GestureDetector(
       onTap: () async {
         if (widget.course.quizzes.isEmpty) return;
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => QuizScreen(course: widget.course)),
-        );
-        _loadProgress();
+        if (isLocked) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Complete all lessons to unlock the final quiz.'),
+              backgroundColor: AppTheme.errorRed,
+            ),
+          );
+          return;
+        }
+        await NetworkSimulator.delay(context);
+        if (mounted) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => QuizScreen(course: widget.course)),
+          );
+          _loadProgress();
+        }
       },
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: AppTheme.softCard(),
-        child: Row(
-          children: [
-            Container(
-              width: 48, height: 48,
-              decoration: BoxDecoration(
-                color: hasTaken
-                    ? AppTheme.successGreen.withValues(alpha: 0.1)
-                    : widget.course.color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(14),
+      child: Opacity(
+        opacity: isLocked ? 0.5 : 1.0,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: AppTheme.softCard(),
+          child: Row(
+            children: [
+              Container(
+                width: 48, height: 48,
+                decoration: BoxDecoration(
+                  color: hasTaken
+                      ? AppTheme.successGreen.withValues(alpha: 0.1)
+                      : isLocked
+                          ? AppTheme.divider.withValues(alpha: 0.1)
+                          : widget.course.color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  hasTaken
+                      ? Icons.check_circle_rounded
+                      : isLocked
+                          ? Icons.lock_outline_rounded
+                          : Icons.quiz_rounded,
+                  color: hasTaken
+                      ? AppTheme.successGreen
+                      : isLocked
+                          ? AppTheme.textMuted
+                          : widget.course.color,
+                  size: 24,
+                ),
               ),
-              child: Icon(
-                hasTaken ? Icons.check_circle_rounded : Icons.quiz_rounded,
-                color: hasTaken ? AppTheme.successGreen : widget.course.color,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    hasTaken ? 'Quiz Completed' : 'Take Final Quiz',
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 16, fontWeight: FontWeight.w600,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasTaken
+                          ? 'Quiz Completed'
+                          : isLocked
+                              ? 'Final Quiz (Locked)'
+                              : 'Take Final Quiz',
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontSize: 16, fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    hasTaken
-                        ? 'Score: ${_quizScore!['score']}/${_quizScore!['total']}'
-                        : '${widget.course.quizzes.length} questions',
-                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      hasTaken
+                          ? 'Score: ${_quizScore!['score']}/${_quizScore!['total']}'
+                          : isLocked
+                              ? 'Complete all lessons to unlock'
+                              : '${widget.course.quizzes.length} questions',
+                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: hasTaken ? AppTheme.successGreen : AppTheme.textMuted,
-            ),
-          ],
+              Icon(
+                isLocked ? Icons.lock_rounded : Icons.chevron_right_rounded,
+                color: hasTaken
+                    ? AppTheme.successGreen
+                    : isLocked
+                        ? AppTheme.textMuted
+                        : widget.course.color,
+              ),
+            ],
+          ),
         ),
       ),
     );

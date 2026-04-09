@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/course_card.dart';
 import 'course_detail_screen.dart';
 import 'trophy_room_screen.dart';
+import '../utils/network_simulator.dart';
 
 class MyLearningScreen extends StatefulWidget {
   final VoidCallback? onRefreshParent;
@@ -34,6 +35,9 @@ class _MyLearningScreenState extends State<MyLearningScreen> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
+
+    await updateCoursesFromFirestore();
+    await _ds.syncWithCloud();
 
     final enrolledIds = await _ds.getEnrolledCourseIds();
     final enrolled = sampleCourses.where((c) => enrolledIds.contains(c.id)).toList();
@@ -158,8 +162,12 @@ class _MyLearningScreenState extends State<MyLearningScreen> {
               // Trophy room shortcut
               if (completedCourses.isNotEmpty)
                 TextButton.icon(
-                  onPressed: () => Navigator.push(
-                    context, MaterialPageRoute(builder: (_) => const TrophyRoomScreen())),
+                  onPressed: () async {
+                    await NetworkSimulator.delay(context);
+                    if (mounted) {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const TrophyRoomScreen()));
+                    }
+                  },
                   icon: const Icon(Icons.emoji_events_rounded, size: 16, color: Color(0xFFFFD93D)),
                   label: const Text('Trophies',
                       style: TextStyle(color: Color(0xFFFFD93D), fontSize: 12)),
@@ -174,25 +182,24 @@ class _MyLearningScreenState extends State<MyLearningScreen> {
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
                     color: AppTheme.textSecondary)),
             const SizedBox(height: 12),
-            GridView.builder(
+            ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 14, crossAxisSpacing: 14,
-                childAspectRatio: 0.78,
-              ),
               itemCount: inProgressCourses.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 14),
               itemBuilder: (context, index) {
                 final course = inProgressCourses[index];
                 return CourseCard(
                   course: course,
                   progress: _progress[course.id] ?? 0.0,
                   onTap: () async {
-                    await Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => CourseDetailScreen(course: course)));
-                    _loadData();
-                    widget.onRefreshParent?.call();
+                    await NetworkSimulator.delay(context);
+                    if (mounted) {
+                      await Navigator.push(context,
+                          MaterialPageRoute(builder: (_) => CourseDetailScreen(course: course)));
+                      _loadData();
+                      widget.onRefreshParent?.call();
+                    }
                   },
                 );
               },

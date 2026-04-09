@@ -43,6 +43,21 @@ class _CourseCardState extends State<CourseCard>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Use soft tints for card backgrounds matching reference styles
+    final Color cardBg = isDark
+        ? const Color(0xFF1E1C2E)
+        : widget.course.color.withValues(alpha: 0.08);
+
+    final Color cardBorder = isDark
+        ? Colors.white.withValues(alpha: 0.05)
+        : widget.course.color.withValues(alpha: 0.12);
+
+    // Mock star rating deterministically
+    final double rating = 3.5 + (widget.course.title.hashCode % 15) / 10;
+    final int progressPercent = (widget.progress * 100).toInt();
+
     return GestureDetector(
       onTapDown: (_) => _controller.forward(),
       onTapUp: (_) {
@@ -59,91 +74,144 @@ class _CourseCardState extends State<CourseCard>
           );
         },
         child: Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppTheme.surfaceCard,
+            color: cardBg,
             borderRadius: BorderRadius.circular(20),
-            boxShadow: AppTheme.cardShadow,
+            border: Border.all(color: cardBorder, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: widget.course.color.withValues(alpha: isDark ? 0.01 : 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              )
+            ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Course icon with colored background
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: widget.course.color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    widget.course.icon,
-                    color: widget.course.color,
-                    size: 24,
-                  ),
+          child: Row(
+            children: [
+              // 1. Left side: Circular Icon Container
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    )
+                  ],
                 ),
-                const SizedBox(height: 12),
-                // Category chip
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.chipBg,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    widget.course.category,
-                    style: const TextStyle(
-                      color: AppTheme.chipText,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+                child: Icon(
+                  widget.course.icon,
+                  color: widget.course.color,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 16),
+
+              // 2. Middle: Content Column
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Category & Rating Row
+                    Row(
+                      children: [
+                        Text(
+                          widget.course.category.toUpperCase(),
+                          style: TextStyle(
+                            color: isDark ? AppTheme.primaryPurpleLight : widget.course.color.withValues(alpha: 0.8),
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.star_rounded, color: Color(0xFFFFB74D), size: 10),
+                        const SizedBox(width: 2),
+                        Text(
+                          rating.toStringAsFixed(1),
+                          style: TextStyle(
+                            color: isDark ? Colors.white60 : Colors.black45,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 4),
+
+                    // Title
+                    Text(
+                      widget.course.title,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : const Color(0xFF1E1E2E),
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Progress Row & Bar
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: widget.progress,
+                              backgroundColor: isDark ? Colors.white10 : const Color(0xFFE4E1FA),
+                              valueColor: AlwaysStoppedAnimation<Color>(widget.course.color),
+                              minHeight: 4,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          progressPercent > 0 ? '$progressPercent% complete' : 'Start course',
+                          style: TextStyle(
+                            color: isDark ? Colors.white54 : const Color(0xFF6E6E82),
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '•  ${widget.course.totalLessons} lessons',
+                          style: TextStyle(
+                            color: isDark ? Colors.white30 : Colors.black38,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                // Title
-                Text(
-                  widget.course.title,
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(width: 12),
+
+              // 3. Right side: Arrow forward circle
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withValues(alpha: 0.1) : widget.course.color,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  '${widget.course.totalLessons} lessons \u2022 ${widget.course.totalQuizzes} quizzes',
-                  style: const TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 11,
-                  ),
+                child: const Icon(
+                  Icons.arrow_forward_rounded,
+                  color: Colors.white,
+                  size: 14,
                 ),
-                const Spacer(),
-                // Progress bar
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: widget.progress,
-                    backgroundColor: AppTheme.divider,
-                    valueColor: AlwaysStoppedAnimation<Color>(widget.course.color),
-                    minHeight: 4,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  '${(widget.progress * 100).toInt()}% complete',
-                  style: const TextStyle(
-                    color: AppTheme.textMuted,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
