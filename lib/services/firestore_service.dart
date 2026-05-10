@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'auth_service.dart';
+import 'progress_service.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
@@ -64,8 +65,6 @@ class FirestoreService {
       'completedLessons': FieldValue.arrayUnion(lessonIds),
     }, SetOptions(merge: true));
   }
-
-  Future<void> updateUserProfile({String? name}) async {
 
   Future<void> updateUserProfile({String? name}) async {
     if (_userDoc == null) return;
