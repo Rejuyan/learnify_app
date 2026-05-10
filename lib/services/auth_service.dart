@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'firestore_service.dart';
 
 class AuthService {
   // Singleton pattern

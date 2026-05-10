@@ -73,7 +73,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     Course? continueCourse;
     double maxIncompleteProgress = -1;
 
-    final firestoreService = FirestoreService();
     final isCloud = firestoreService.isLoggedIn;
 
     for (final course in sampleCourses) {
