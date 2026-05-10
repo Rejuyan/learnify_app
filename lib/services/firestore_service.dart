@@ -16,7 +16,7 @@ class FirestoreService {
   DocumentReference<Map<String, dynamic>>? get _userDoc =>
       _uid != null ? _db.collection('users').doc(_uid) : null;
 
-  Future<void> initUserDocument() async {
+  Future<void> initUserDocument({List<String>? migrateCourseIds}) async {
     if (_userDoc == null) return;
     final snap = await _userDoc!.get();
     if (!snap.exists) {
@@ -27,8 +27,45 @@ class FirestoreService {
         'enrolledCourses': [],
         'earnedCertificates': [],
       });
+      // New user? Migrate any local progress they had as a guest
+      if (migrateCourseIds != null) {
+        await migrateLocalProgress(migrateCourseIds);
+      }
     }
   }
+
+  Future<void> migrateLocalProgress(List<String> courseIds) async {
+    if (_userDoc == null) return;
+    
+    for (final courseId in courseIds) {
+      final localCompleted = await ProgressService.getCompletedLessons(courseId);
+      if (localCompleted.isNotEmpty) {
+        await markLessonsComplete(courseId, localCompleted);
+      }
+      
+      final localQuiz = await ProgressService.getQuizScore(courseId);
+      if (localQuiz != null) {
+        await saveQuizScore(courseId, localQuiz['score']!, localQuiz['total']!);
+      }
+      
+      final isEnrolledLocal = await ProgressService.isEnrolled(courseId);
+      if (isEnrolledLocal) {
+        await enrollCourse(courseId);
+      }
+    }
+  }
+
+  Future<void> markLessonsComplete(String courseId, List<String> lessonIds) async {
+    if (_userDoc == null) return;
+    await _userDoc!
+        .collection('progress')
+        .doc(courseId)
+        .set({
+      'completedLessons': FieldValue.arrayUnion(lessonIds),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> updateUserProfile({String? name}) async {
 
   Future<void> updateUserProfile({String? name}) async {
     if (_userDoc == null) return;

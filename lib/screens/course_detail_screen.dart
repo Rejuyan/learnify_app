@@ -56,7 +56,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
         : await ProgressService.getQuizScore(widget.course.id);
     final enrolled = isCloud
         ? await firestoreService.isEnrolled(widget.course.id)
-        : false;
+        : await ProgressService.isEnrolled(widget.course.id);
 
     if (mounted) {
       setState(() {
@@ -68,20 +68,25 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
   }
 
   Future<void> _toggleEnroll() async {
-    if (!FirestoreService().isLoggedIn) {
-      await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-      return;
-    }
+    final isCloud = FirestoreService().isLoggedIn;
+    final wasEnrolled = _isEnrolled;
     
     // Optimistic UI update
-    final wasEnrolled = _isEnrolled;
     setState(() => _isEnrolled = !wasEnrolled);
-    
+
     try {
       if (wasEnrolled) {
-        await FirestoreService().unenrollCourse(widget.course.id);
+        if (isCloud) {
+          await FirestoreService().unenrollCourse(widget.course.id);
+        } else {
+          await ProgressService.unenrollCourse(widget.course.id);
+        }
       } else {
-        await FirestoreService().enrollCourse(widget.course.id);
+        if (isCloud) {
+          await FirestoreService().enrollCourse(widget.course.id);
+        } else {
+          await ProgressService.enrollCourse(widget.course.id);
+        }
       }
     } catch (e) {
       // Revert if failed

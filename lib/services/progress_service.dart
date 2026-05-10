@@ -99,6 +99,30 @@ class ProgressService {
     };
   }
 
+  // ─── Enrollment ────────────────────────────────────────────────
+  
+  static Future<void> enrollCourse(String courseId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final enrolled = prefs.getStringList('enrolled_courses') ?? [];
+    if (!enrolled.contains(courseId)) {
+      enrolled.add(courseId);
+      await prefs.setStringList('enrolled_courses', enrolled);
+    }
+  }
+
+  static Future<void> unenrollCourse(String courseId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final enrolled = prefs.getStringList('enrolled_courses') ?? [];
+    enrolled.remove(courseId);
+    await prefs.setStringList('enrolled_courses', enrolled);
+  }
+
+  static Future<bool> isEnrolled(String courseId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final enrolled = prefs.getStringList('enrolled_courses') ?? [];
+    return enrolled.contains(courseId);
+  }
+
   // ─── Reset ──────────────────────────────────────────────────────
 
   static Future<void> resetAllProgress() async {

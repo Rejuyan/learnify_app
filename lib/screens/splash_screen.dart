@@ -4,6 +4,8 @@ import '../theme/app_theme.dart';
 import 'home_screen.dart';
 import 'auth/login_screen.dart';
 import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
+import '../data/sample_data.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -63,15 +65,26 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     _navigateToNext();
   }
 
-  void _navigateToNext() {
+  Future<void> _navigateToNext() async {
     if (!mounted) return;
     
     final user = AuthService().currentUser;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => user != null ? const HomeScreen() : const LoginScreen(),
-      ),
-    );
+    if (user != null) {
+      // Initialize/Migrate user data
+      await FirestoreService().initUserDocument(
+        migrateCourseIds: sampleCourses.map((c) => c.id).toList(),
+      );
+      
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      }
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    }
   }
 
   @override
