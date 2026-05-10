@@ -227,8 +227,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
                         const SizedBox(height: 20),
 
                         // Enroll Button
-                        if (AuthService().currentUser != null)
-                          AnimatedContainer(
+                        AnimatedContainer(
                             duration: const Duration(milliseconds: 300),
                             width: double.infinity,
                             child: _isEnrolled

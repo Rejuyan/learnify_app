@@ -76,16 +76,19 @@ class _LessonScreenState extends State<LessonScreen>
     final isCloud = FirestoreService().isLoggedIn;
     
     try {
-      final completed = isCloud
-          ? (await FirestoreService().getCompletedLessons(widget.course.id))
-              .contains(lesson.id)
-          : await ProgressService.isLessonComplete(widget.course.id, lesson.id);
+      // Add a timeout to prevent hanging UI
+      final completed = await (isCloud
+          ? FirestoreService().getCompletedLessons(widget.course.id)
+          : ProgressService.getCompletedLessons(widget.course.id))
+          .timeout(const Duration(seconds: 3), onTimeout: () => _isCompleted ? [lesson.id] : []);
+      
+      final isDone = completed.contains(lesson.id);
       
       if (mounted) {
         setState(() {
-          _isCompleted = completed;
+          _isCompleted = isDone;
           _isLoadingStatus = false;
-          if (completed && lesson.quizzes != null) {
+          if (isDone && lesson.quizzes != null) {
             for (int i = 0; i < lesson.quizzes!.length; i++) {
               _selectedOptions[i] = lesson.quizzes![i].correctIndex;
               _showResults[i] = true;
@@ -101,20 +104,28 @@ class _LessonScreenState extends State<LessonScreen>
   Future<void> _toggleComplete() async {
     final lesson = widget.course.lessons[_currentIndex];
     final isCloud = FirestoreService().isLoggedIn;
-    if (_isCompleted) {
-      if (isCloud) {
-        await FirestoreService().markLessonIncomplete(widget.course.id, lesson.id);
+    
+    final targetState = !_isCompleted;
+    setState(() => _isCompleted = targetState);
+    
+    try {
+      if (!targetState) {
+        if (isCloud) {
+          await FirestoreService().markLessonIncomplete(widget.course.id, lesson.id);
+        } else {
+          await ProgressService.markLessonIncomplete(widget.course.id, lesson.id);
+        }
       } else {
-        await ProgressService.markLessonIncomplete(widget.course.id, lesson.id);
+        if (isCloud) {
+          await FirestoreService().markLessonComplete(widget.course.id, lesson.id);
+        } else {
+          await ProgressService.markLessonComplete(widget.course.id, lesson.id);
+        }
       }
-    } else {
-      if (isCloud) {
-        await FirestoreService().markLessonComplete(widget.course.id, lesson.id);
-      } else {
-        await ProgressService.markLessonComplete(widget.course.id, lesson.id);
-      }
+    } catch (e) {
+      // Revert if failed
+      if (mounted) setState(() => _isCompleted = !targetState);
     }
-    setState(() => _isCompleted = !_isCompleted);
   }
 
   void _goToLesson(int index) {
@@ -556,19 +567,21 @@ class _LessonScreenState extends State<LessonScreen>
                             await Navigator.push(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
                             return;
                           }
-                          if (!user.emailVerified) {
-                            await Navigator.push(context, MaterialPageRoute(builder: (context) => const VerifyEmailScreen()));
-                            return;
-                          }
 
                           if (!_allQuizzesPassed) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Please answer all lesson quizzes correctly to proceed.'),
-                                backgroundColor: AppTheme.errorRed,
+                            final proceed = await showDialog<bool>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                backgroundColor: AppTheme.surfaceCard,
+                                title: const Text('Quizzes not completed'),
+                                content: const Text('You haven\'t answered all quizzes correctly. Mark as complete anyway?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+                                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes, proceed')),
+                                ],
                               ),
                             );
-                            return;
+                            if (proceed != true) return;
                           }
                           await _toggleComplete();
                         }
