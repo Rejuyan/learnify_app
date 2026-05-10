@@ -28,6 +28,7 @@ class _LessonScreenState extends State<LessonScreen>
     with SingleTickerProviderStateMixin {
   late int _currentIndex;
   bool _isCompleted = false;
+  bool _isLoadingStatus = true;
   late AnimationController _animController;
   
   // Quiz state
@@ -70,22 +71,30 @@ class _LessonScreenState extends State<LessonScreen>
   }
 
   Future<void> _checkCompletion() async {
+    setState(() => _isLoadingStatus = true);
     final lesson = widget.course.lessons[_currentIndex];
     final isCloud = FirestoreService().isLoggedIn;
-    final completed = isCloud
-        ? (await FirestoreService().getCompletedLessons(widget.course.id))
-            .contains(lesson.id)
-        : await ProgressService.isLessonComplete(widget.course.id, lesson.id);
-    if (mounted) {
-      setState(() {
-        _isCompleted = completed;
-        if (completed && lesson.quizzes != null) {
-          for (int i = 0; i < lesson.quizzes!.length; i++) {
-            _selectedOptions[i] = lesson.quizzes![i].correctIndex;
-            _showResults[i] = true;
+    
+    try {
+      final completed = isCloud
+          ? (await FirestoreService().getCompletedLessons(widget.course.id))
+              .contains(lesson.id)
+          : await ProgressService.isLessonComplete(widget.course.id, lesson.id);
+      
+      if (mounted) {
+        setState(() {
+          _isCompleted = completed;
+          _isLoadingStatus = false;
+          if (completed && lesson.quizzes != null) {
+            for (int i = 0; i < lesson.quizzes!.length; i++) {
+              _selectedOptions[i] = lesson.quizzes![i].correctIndex;
+              _showResults[i] = true;
+            }
           }
-        }
-      });
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoadingStatus = false);
     }
   }
 
@@ -139,6 +148,22 @@ class _LessonScreenState extends State<LessonScreen>
       _selectedOptions[quizIndex] = optionIndex;
       _showResults[quizIndex] = true;
     });
+
+    // Auto-advance logic: If all quizzes are now passed, automatically mark complete and move on
+    if (_allQuizzesPassed && !_isCompleted) {
+      Future.delayed(const Duration(milliseconds: 1200), () async {
+        if (mounted && _allQuizzesPassed && !_isCompleted) {
+          await _toggleComplete();
+          // After completing, go to next lesson automatically if not the last one
+          if (mounted) {
+            final totalLessons = widget.course.lessons.length;
+            if (_currentIndex < totalLessons - 1) {
+              _goToLesson(_currentIndex + 1);
+            }
+          }
+        }
+      });
+    }
   }
 
   void _showNotesSheet(BuildContext context) {
@@ -512,7 +537,7 @@ class _LessonScreenState extends State<LessonScreen>
                   const Spacer(),
                 const SizedBox(width: 12),
                 // Complete & Next / Done
-                Expanded(
+                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -520,46 +545,52 @@ class _LessonScreenState extends State<LessonScreen>
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       disabledBackgroundColor: AppTheme.divider,
                     ),
-                    onPressed: () async {
-                      if (!_isCompleted) {
-                        final authService = AuthService();
-                        final user = authService.currentUser;
-                        
-                        if (user == null) {
-                          await Navigator.push(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
-                          return;
-                        }
-                        if (!user.emailVerified) {
-                          await Navigator.push(context, MaterialPageRoute(builder: (context) => const VerifyEmailScreen()));
-                          return;
-                        }
+                    onPressed: _isLoadingStatus 
+                      ? null 
+                      : () async {
+                        if (!_isCompleted) {
+                          final authService = AuthService();
+                          final user = authService.currentUser;
+                          
+                          if (user == null) {
+                            await Navigator.push(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
+                            return;
+                          }
+                          if (!user.emailVerified) {
+                            await Navigator.push(context, MaterialPageRoute(builder: (context) => const VerifyEmailScreen()));
+                            return;
+                          }
 
-                        if (!_allQuizzesPassed) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Please answer all lesson quizzes correctly to proceed.'),
-                              backgroundColor: AppTheme.errorRed,
-                            ),
-                          );
-                          return;
+                          if (!_allQuizzesPassed) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please answer all lesson quizzes correctly to proceed.'),
+                                backgroundColor: AppTheme.errorRed,
+                              ),
+                            );
+                            return;
+                          }
+                          await _toggleComplete();
                         }
-                        await _toggleComplete();
-                      }
-                      if (_currentIndex < totalLessons - 1) {
-                        _goToLesson(_currentIndex + 1);
-                      } else {
-                        if (context.mounted) Navigator.pop(context);
-                      }
-                    },
-                    child: Text(
-                      _currentIndex < totalLessons - 1
-                          ? (_isCompleted ? 'Next Lesson' : 'Complete & Next')
-                          : 'Finish Course',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                        
+                        // Proceed to next or finish
+                        if (_currentIndex < totalLessons - 1) {
+                          _goToLesson(_currentIndex + 1);
+                        } else {
+                          if (context.mounted) Navigator.pop(context);
+                        }
+                      },
+                    child: _isLoadingStatus
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Text(
+                          _currentIndex < totalLessons - 1
+                              ? (_isCompleted ? 'Next Lesson' : 'Complete & Next')
+                              : 'Finish Course',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                   ),
                 ),
               ],

@@ -198,7 +198,7 @@ class _QuizScreenState extends State<QuizScreen>
                               Expanded(
                                 child: Text(
                                   (_selectedOption == quiz.correctIndex)
-                                      ? 'Correct! Great job! \u{1F389}'
+                                      ? 'Correct! Great job!'
                                       : 'The correct answer is: ${quiz.options[quiz.correctIndex]}',
                                   style: TextStyle(
                                     color: (_selectedOption == quiz.correctIndex)
@@ -304,7 +304,7 @@ class _QuizScreenState extends State<QuizScreen>
                   ),
                   const SizedBox(height: 28),
                   Text(
-                    isPassed ? 'Congratulations! \u{1F389}' : 'Keep Learning! \u{1F4AA}',
+                    isPassed ? 'Congratulations!' : 'Keep Learning!',
                     style: const TextStyle(
                       color: AppTheme.textPrimary,
                       fontSize: 26,

@@ -72,12 +72,26 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
       await Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
       return;
     }
-    if (_isEnrolled) {
-      await FirestoreService().unenrollCourse(widget.course.id);
-    } else {
-      await FirestoreService().enrollCourse(widget.course.id);
+    
+    // Optimistic UI update
+    final wasEnrolled = _isEnrolled;
+    setState(() => _isEnrolled = !wasEnrolled);
+    
+    try {
+      if (wasEnrolled) {
+        await FirestoreService().unenrollCourse(widget.course.id);
+      } else {
+        await FirestoreService().enrollCourse(widget.course.id);
+      }
+    } catch (e) {
+      // Revert if failed
+      if (mounted) {
+        setState(() => _isEnrolled = wasEnrolled);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update enrollment: $e')),
+        );
+      }
     }
-    setState(() => _isEnrolled = !_isEnrolled);
   }
 
   int get _firstIncompleteLessonIndex {

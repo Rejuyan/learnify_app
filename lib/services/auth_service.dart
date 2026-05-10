@@ -52,9 +52,13 @@ class AuthService {
 
   // Update Display Name
   Future<void> updateDisplayName(String name) async {
-    if (currentUser != null) {
-      await currentUser!.updateDisplayName(name);
-      await currentUser!.reload();
+    final user = _auth.currentUser;
+    if (user != null) {
+      await user.updateDisplayName(name);
+      await user.reload();
+      
+      // Also update Firestore for consistency
+      await FirestoreService().updateUserProfile(name: name);
     }
   }
 

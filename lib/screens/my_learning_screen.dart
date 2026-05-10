@@ -79,7 +79,7 @@ class _MyLearningScreenState extends State<MyLearningScreen> {
         padding: const EdgeInsets.all(24),
         children: [
           Text(
-            'My Learning \u{1F4DA}',
+            'My Learning',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 4),

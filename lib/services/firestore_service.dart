@@ -30,6 +30,15 @@ class FirestoreService {
     }
   }
 
+  Future<void> updateUserProfile({String? name}) async {
+    if (_userDoc == null) return;
+    final Map<String, dynamic> updates = {};
+    if (name != null) updates['displayName'] = name;
+    if (updates.isNotEmpty) {
+      await _userDoc!.update(updates);
+    }
+  }
+
   // ─── Progress ────────────────────────────────────────────────────
 
   Future<void> markLessonComplete(String courseId, String lessonId) async {

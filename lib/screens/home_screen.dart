@@ -61,6 +61,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadProgress() async {
+    final firestoreService = FirestoreService();
+    
+    // Ensure we have the latest user data
+    if (AuthService().currentUser != null) {
+      await AuthService().currentUser!.reload();
+    }
+    
     final Map<String, double> progress = {};
     double totalProgress = 0;
     Course? continueCourse;
@@ -98,8 +105,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final user = AuthService().currentUser;
     String name = 'Guest';
     if (user != null) {
-      if (user.displayName != null && user.displayName!.isNotEmpty) {
-        name = user.displayName!;
+      // Re-fetch displayName after possible reload
+      final displayName = user.displayName;
+      if (displayName != null && displayName.isNotEmpty) {
+        name = displayName;
       } else if (user.email != null) {
         name = user.email!.split('@')[0];
         if (name.isNotEmpty) {
@@ -374,7 +383,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
-                                  'Good Morning \u{1F44B}',
+                                  'Good Morning',
                                   style: TextStyle(
                                     color: Colors.white70,
                                     fontSize: 14,
@@ -548,7 +557,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: const Text(
-                                    '\u{1F525} Progress',
+                                    'Progress',
                                     style: TextStyle(
                                       color: AppTheme.accentOrange,
                                       fontSize: 11,
@@ -618,8 +627,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 children: [
                   Text(
                     _searchQuery.isNotEmpty 
-                        ? 'Search Results' 
-                        : (_selectedCategory == 'All' ? 'Top Rated \u{1F4A1}' : _selectedCategory),
+                        ? 'Suggested For You' 
+                        : (_selectedCategory == 'All' ? 'Top Rated' : _selectedCategory),
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const Spacer(),
