@@ -7,7 +7,6 @@ import '../widgets/quiz_option.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import 'auth/login_screen.dart';
-import 'auth/verify_email_screen.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 class LessonScreen extends StatefulWidget {
@@ -29,12 +28,13 @@ class _LessonScreenState extends State<LessonScreen>
   late int _currentIndex;
   bool _isCompleted = false;
   bool _isLoadingStatus = true;
+  bool _isSaving = false;
   late AnimationController _animController;
-  
+
   // Quiz state
   final Map<int, int?> _selectedOptions = {};
   final Map<int, bool> _showResults = {};
-  
+
   // Video state
   YoutubePlayerController? _youtubeController;
 
@@ -55,10 +55,7 @@ class _LessonScreenState extends State<LessonScreen>
     if (lesson.youtubeVideoId != null) {
       _youtubeController = YoutubePlayerController(
         initialVideoId: lesson.youtubeVideoId!,
-        flags: const YoutubePlayerFlags(
-          autoPlay: false,
-          mute: false,
-        ),
+        flags: const YoutubePlayerFlags(autoPlay: false, mute: false),
       );
     }
   }
@@ -71,23 +68,32 @@ class _LessonScreenState extends State<LessonScreen>
   }
 
   Future<void> _checkCompletion() async {
-    setState(() => _isLoadingStatus = true);
+    if (!mounted) return;
+    setState(() {
+      _isLoadingStatus = true;
+      _isCompleted = false;
+    });
+
     final lesson = widget.course.lessons[_currentIndex];
     final isCloud = FirestoreService().isLoggedIn;
-    
+
     try {
-      // Add a timeout to prevent hanging UI
-      final completed = await (isCloud
-          ? FirestoreService().getCompletedLessons(widget.course.id)
-          : ProgressService.getCompletedLessons(widget.course.id))
-          .timeout(const Duration(seconds: 3), onTimeout: () => _isCompleted ? [lesson.id] : []);
-      
+      List<String> completed;
+      if (isCloud) {
+        completed = await FirestoreService()
+            .getCompletedLessons(widget.course.id)
+            .timeout(const Duration(seconds: 5), onTimeout: () => []);
+      } else {
+        completed = await ProgressService.getCompletedLessons(widget.course.id);
+      }
+
       final isDone = completed.contains(lesson.id);
-      
+
       if (mounted) {
         setState(() {
           _isCompleted = isDone;
           _isLoadingStatus = false;
+          // If already done, fill in correct answers visually
           if (isDone && lesson.quizzes != null) {
             for (int i = 0; i < lesson.quizzes!.length; i++) {
               _selectedOptions[i] = lesson.quizzes![i].correctIndex;
@@ -96,50 +102,72 @@ class _LessonScreenState extends State<LessonScreen>
           }
         });
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) setState(() => _isLoadingStatus = false);
     }
   }
 
-  Future<void> _toggleComplete() async {
+  Future<void> _markComplete() async {
+    if (_isSaving) return;
     final lesson = widget.course.lessons[_currentIndex];
     final isCloud = FirestoreService().isLoggedIn;
-    
-    final targetState = !_isCompleted;
-    setState(() => _isCompleted = targetState);
-    
+
+    setState(() {
+      _isSaving = true;
+      _isCompleted = true; // Optimistic update
+    });
+
     try {
-      if (!targetState) {
-        if (isCloud) {
-          await FirestoreService().markLessonIncomplete(widget.course.id, lesson.id);
-        } else {
-          await ProgressService.markLessonIncomplete(widget.course.id, lesson.id);
-        }
+      if (isCloud) {
+        await FirestoreService().markLessonComplete(widget.course.id, lesson.id);
       } else {
-        if (isCloud) {
-          await FirestoreService().markLessonComplete(widget.course.id, lesson.id);
-        } else {
-          await ProgressService.markLessonComplete(widget.course.id, lesson.id);
-        }
+        await ProgressService.markLessonComplete(widget.course.id, lesson.id);
       }
-    } catch (e) {
-      // Revert if failed
-      if (mounted) setState(() => _isCompleted = !targetState);
+    } catch (_) {
+      if (mounted) setState(() => _isCompleted = false); // revert on error
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _markIncomplete() async {
+    if (_isSaving) return;
+    final lesson = widget.course.lessons[_currentIndex];
+    final isCloud = FirestoreService().isLoggedIn;
+
+    setState(() {
+      _isSaving = true;
+      _isCompleted = false; // Optimistic update
+    });
+
+    try {
+      if (isCloud) {
+        await FirestoreService().markLessonIncomplete(widget.course.id, lesson.id);
+      } else {
+        await ProgressService.markLessonIncomplete(widget.course.id, lesson.id);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isCompleted = true); // revert on error
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   void _goToLesson(int index) {
+    _youtubeController?.dispose();
+    _youtubeController = null;
+
     setState(() {
       _currentIndex = index;
       _selectedOptions.clear();
       _showResults.clear();
+      _isCompleted = false;
+      _isLoadingStatus = true;
       _animController.reset();
       _animController.forward();
-      
-      _youtubeController?.dispose();
-      _youtubeController = null;
-      _initYoutubePlayer();
     });
+
+    _initYoutubePlayer();
     _checkCompletion();
   }
 
@@ -147,34 +175,21 @@ class _LessonScreenState extends State<LessonScreen>
     final lesson = widget.course.lessons[_currentIndex];
     if (lesson.quizzes == null || lesson.quizzes!.isEmpty) return true;
     for (int i = 0; i < lesson.quizzes!.length; i++) {
-      if (_selectedOptions[i] != lesson.quizzes![i].correctIndex) {
-        return false;
-      }
+      if (_selectedOptions[i] != lesson.quizzes![i].correctIndex) return false;
     }
     return true;
   }
 
   void _selectQuizOption(int quizIndex, int optionIndex) {
+    // Don't allow changing answers after all quizzes are passed
+    if (_isCompleted) return;
+    // Don't allow changing answer after showing result for this question
+    if (_showResults[quizIndex] == true) return;
+
     setState(() {
       _selectedOptions[quizIndex] = optionIndex;
       _showResults[quizIndex] = true;
     });
-
-    // Auto-advance logic: If all quizzes are now passed, automatically mark complete and move on
-    if (_allQuizzesPassed && !_isCompleted) {
-      Future.delayed(const Duration(milliseconds: 1200), () async {
-        if (mounted && _allQuizzesPassed && !_isCompleted) {
-          await _toggleComplete();
-          // After completing, go to next lesson automatically if not the last one
-          if (mounted) {
-            final totalLessons = widget.course.lessons.length;
-            if (_currentIndex < totalLessons - 1) {
-              _goToLesson(_currentIndex + 1);
-            }
-          }
-        }
-      });
-    }
   }
 
   void _showNotesSheet(BuildContext context) {
@@ -182,9 +197,10 @@ class _LessonScreenState extends State<LessonScreen>
     final noteController = TextEditingController();
     bool isSaving = false;
 
-    // Load existing note
     FirestoreService().getNote(lesson.id).then((existing) {
-      if (existing != null) noteController.text = existing;
+      if (existing != null && noteController.text.isEmpty) {
+        noteController.text = existing;
+      }
     });
 
     showModalBottomSheet(
@@ -222,12 +238,13 @@ class _LessonScreenState extends State<LessonScreen>
                     children: [
                       const Icon(Icons.notes_rounded, color: AppTheme.primaryPurple),
                       const SizedBox(width: 10),
-                      Text('My Notes',
-                          style: Theme.of(context).textTheme.headlineSmall),
+                      Text('My Notes', style: Theme.of(context).textTheme.headlineSmall),
                       const Spacer(),
-                      Text(lesson.title,
-                          style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
-                          overflow: TextOverflow.ellipsis),
+                      Flexible(
+                        child: Text(lesson.title,
+                            style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                            overflow: TextOverflow.ellipsis),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -250,8 +267,7 @@ class _LessonScreenState extends State<LessonScreen>
                           ? null
                           : () async {
                               setModalState(() => isSaving = true);
-                              await FirestoreService()
-                                  .saveNote(lesson.id, noteController.text);
+                              await FirestoreService().saveNote(lesson.id, noteController.text);
                               setModalState(() => isSaving = false);
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -283,7 +299,7 @@ class _LessonScreenState extends State<LessonScreen>
   Widget build(BuildContext context) {
     final lesson = widget.course.lessons[_currentIndex];
     final totalLessons = widget.course.lessons.length;
-    final progress = (_currentIndex + 1) / totalLessons;
+    final lessonProgress = (_currentIndex + 1) / totalLessons;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
@@ -307,59 +323,43 @@ class _LessonScreenState extends State<LessonScreen>
           title: Text(
             'Lesson ${_currentIndex + 1} of $totalLessons',
             style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: AppTheme.textSecondary,
+              fontSize: 16, fontWeight: FontWeight.w500, color: AppTheme.textSecondary,
             ),
           ),
           actions: [
-            IconButton(
-              icon: Icon(
-                _isCompleted
-                    ? Icons.check_circle_rounded
-                    : Icons.circle_outlined,
-                color: _isCompleted
-                    ? AppTheme.successGreen
-                    : AppTheme.textMuted,
+            // Toggle completion icon button in app bar
+            if (!_isLoadingStatus)
+              IconButton(
+                icon: Icon(
+                  _isCompleted ? Icons.check_circle_rounded : Icons.circle_outlined,
+                  color: _isCompleted ? AppTheme.successGreen : AppTheme.textMuted,
+                ),
+                onPressed: _isSaving
+                    ? null
+                    : () async {
+                        if (_isCompleted) {
+                          await _markIncomplete();
+                        } else {
+                          if (AuthService().currentUser == null) {
+                            await Navigator.push(context,
+                                MaterialPageRoute(builder: (_) => const LoginScreen()));
+                            return;
+                          }
+                          await _markComplete();
+                        }
+                      },
+                tooltip: _isCompleted ? 'Mark incomplete' : 'Mark complete',
               ),
-              onPressed: () async {
-                final authService = AuthService();
-                final user = authService.currentUser;
-                
-                if (user == null) {
-                  await Navigator.push(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
-                  return;
-                }
-                if (!user.emailVerified) {
-                  await Navigator.push(context, MaterialPageRoute(builder: (context) => const VerifyEmailScreen()));
-                  return;
-                }
-
-                if (!_isCompleted && !_allQuizzesPassed) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Please answer all quizzes correctly first.'),
-                      backgroundColor: AppTheme.errorRed,
-                    ),
-                  );
-                  return;
-                }
-                _toggleComplete();
-              },
-              tooltip: _isCompleted ? 'Mark incomplete' : 'Mark complete',
-            ),
           ],
         ),
         body: Column(
           children: [
-            // Progress bar
-            ClipRRect(
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: AppTheme.divider,
-                valueColor: AlwaysStoppedAnimation<Color>(widget.course.color),
-                minHeight: 3,
-              ),
+            // Progress bar showing position within course
+            LinearProgressIndicator(
+              value: lessonProgress,
+              backgroundColor: AppTheme.divider,
+              valueColor: AlwaysStoppedAnimation<Color>(widget.course.color),
+              minHeight: 3,
             ),
 
             // Lesson content
@@ -368,12 +368,8 @@ class _LessonScreenState extends State<LessonScreen>
                 opacity: _animController,
                 child: SlideTransition(
                   position: Tween<Offset>(
-                    begin: const Offset(0.03, 0),
-                    end: Offset.zero,
-                  ).animate(CurvedAnimation(
-                    parent: _animController,
-                    curve: Curves.easeOut,
-                  )),
+                    begin: const Offset(0.03, 0), end: Offset.zero,
+                  ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut)),
                   child: SingleChildScrollView(
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.all(24),
@@ -381,45 +377,27 @@ class _LessonScreenState extends State<LessonScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Lesson title
-                        Text(
-                          lesson.title,
-                          style: Theme.of(context).textTheme.headlineMedium,
-                        ),
+                        Text(lesson.title, style: Theme.of(context).textTheme.headlineMedium),
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            const Icon(
-                              Icons.timer_rounded,
-                              size: 14,
-                              color: AppTheme.textMuted,
-                            ),
+                            const Icon(Icons.timer_rounded, size: 14, color: AppTheme.textMuted),
                             const SizedBox(width: 6),
-                            Text(
-                              '${lesson.durationMinutes} min read',
-                              style: const TextStyle(
-                                color: AppTheme.textMuted,
-                                fontSize: 13,
-                              ),
-                            ),
+                            Text('${lesson.durationMinutes} min read',
+                                style: const TextStyle(color: AppTheme.textMuted, fontSize: 13)),
                             if (_isCompleted) ...[
                               const SizedBox(width: 16),
                               Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: AppTheme.successGreen.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: const Text(
-                                  'Completed',
-                                  style: TextStyle(
-                                    color: AppTheme.successGreen,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
+                                child: const Text('Completed',
+                                    style: TextStyle(
+                                      color: AppTheme.successGreen,
+                                      fontSize: 11, fontWeight: FontWeight.w600,
+                                    )),
                               ),
                             ],
                           ],
@@ -427,7 +405,7 @@ class _LessonScreenState extends State<LessonScreen>
                         const SizedBox(height: 24),
                         const Divider(color: AppTheme.divider, height: 1),
                         const SizedBox(height: 24),
-                        
+
                         // Video Player
                         if (_youtubeController != null) ...[
                           ClipRRect(
@@ -444,23 +422,28 @@ class _LessonScreenState extends State<LessonScreen>
                           const SizedBox(height: 24),
                         ],
 
-                        // Content in a white card
+                        // Lesson content card
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(20),
                           decoration: AppTheme.softCard(borderRadius: 16),
-                          child: Text(
-                            lesson.content,
-                            style: Theme.of(context).textTheme.bodyLarge,
-                          ),
+                          child: Text(lesson.content,
+                              style: Theme.of(context).textTheme.bodyLarge),
                         ),
-                        
+
                         // Lesson Quizzes
                         if (lesson.quizzes != null && lesson.quizzes!.isNotEmpty) ...[
                           const SizedBox(height: 32),
+                          Text('Lesson Quiz', style: Theme.of(context).textTheme.headlineSmall),
+                          const SizedBox(height: 4),
                           Text(
-                            'Lesson Quiz',
-                            style: Theme.of(context).textTheme.headlineSmall,
+                            _isCompleted
+                                ? 'All questions answered correctly!'
+                                : 'Answer all questions correctly to complete this lesson.',
+                            style: TextStyle(
+                              color: _isCompleted ? AppTheme.successGreen : AppTheme.textSecondary,
+                              fontSize: 13,
+                            ),
                           ),
                           const SizedBox(height: 16),
                           ...List.generate(lesson.quizzes!.length, (qIndex) {
@@ -472,14 +455,11 @@ class _LessonScreenState extends State<LessonScreen>
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'Q${qIndex + 1}. ${quiz.question}',
-                                    style: const TextStyle(
-                                      color: AppTheme.textPrimary,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  Text('Q${qIndex + 1}. ${quiz.question}',
+                                      style: const TextStyle(
+                                        color: AppTheme.textPrimary,
+                                        fontSize: 16, fontWeight: FontWeight.bold,
+                                      )),
                                   const SizedBox(height: 16),
                                   ...List.generate(quiz.options.length, (optIndex) {
                                     bool? isCorrect;
@@ -500,7 +480,7 @@ class _LessonScreenState extends State<LessonScreen>
                             );
                           }),
                         ],
-                        
+
                         const SizedBox(height: 40),
                       ],
                     ),
@@ -511,7 +491,6 @@ class _LessonScreenState extends State<LessonScreen>
           ],
         ),
 
-        // ─── Bottom Nav ──────────────────────────────
         bottomNavigationBar: Container(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
           decoration: BoxDecoration(
@@ -519,15 +498,14 @@ class _LessonScreenState extends State<LessonScreen>
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, -2),
+                blurRadius: 10, offset: const Offset(0, -2),
               ),
             ],
           ),
           child: SafeArea(
             child: Row(
               children: [
-                // Previous
+                // Previous button
                 if (_currentIndex > 0)
                   Expanded(
                     child: OutlinedButton.icon(
@@ -537,18 +515,18 @@ class _LessonScreenState extends State<LessonScreen>
                         foregroundColor: AppTheme.textSecondary,
                         side: const BorderSide(color: AppTheme.divider),
                         padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
                       onPressed: () => _goToLesson(_currentIndex - 1),
                     ),
                   )
                 else
                   const Spacer(),
+
                 const SizedBox(width: 12),
-                // Complete & Next / Done
-                 Expanded(
+
+                // Complete & Next button
+                Expanded(
                   flex: 2,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
@@ -556,54 +534,51 @@ class _LessonScreenState extends State<LessonScreen>
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       disabledBackgroundColor: AppTheme.divider,
                     ),
-                    onPressed: _isLoadingStatus 
-                      ? null 
-                      : () async {
-                        if (!_isCompleted) {
-                          final authService = AuthService();
-                          final user = authService.currentUser;
-                          
-                          if (user == null) {
-                            await Navigator.push(context, MaterialPageRoute(builder: (context) => const LoginScreen()));
-                            return;
-                          }
+                    onPressed: (_isLoadingStatus || _isSaving)
+                        ? null
+                        : () async {
+                            // If not yet completed, try to mark complete first
+                            if (!_isCompleted) {
+                              // Must be logged in
+                              if (AuthService().currentUser == null) {
+                                await Navigator.push(context,
+                                    MaterialPageRoute(builder: (_) => const LoginScreen()));
+                                return;
+                              }
 
-                          if (!_allQuizzesPassed) {
-                            final proceed = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                backgroundColor: AppTheme.surfaceCard,
-                                title: const Text('Quizzes not completed'),
-                                content: const Text('You haven\'t answered all quizzes correctly. Mark as complete anyway?'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
-                                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes, proceed')),
-                                ],
-                              ),
-                            );
-                            if (proceed != true) return;
-                          }
-                          await _toggleComplete();
-                        }
-                        
-                        // Proceed to next or finish
-                        if (_currentIndex < totalLessons - 1) {
-                          _goToLesson(_currentIndex + 1);
-                        } else {
-                          if (context.mounted) Navigator.pop(context);
-                        }
-                      },
-                    child: _isLoadingStatus
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Text(
-                          _currentIndex < totalLessons - 1
-                              ? (_isCompleted ? 'Next Lesson' : 'Complete & Next')
-                              : 'Finish Course',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
+                              // Check if quizzes are all passed
+                              if (!_allQuizzesPassed) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Answer all quiz questions correctly to proceed.'),
+                                    backgroundColor: AppTheme.errorRed,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              // Mark complete
+                              await _markComplete();
+                            }
+
+                            // Navigate to next lesson or finish
+                            if (!mounted) return;
+                            if (_currentIndex < totalLessons - 1) {
+                              _goToLesson(_currentIndex + 1);
+                            } else {
+                              Navigator.pop(context);
+                            }
+                          },
+                    child: (_isLoadingStatus || _isSaving)
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : Text(
+                            _currentIndex < totalLessons - 1
+                                ? (_isCompleted ? 'Next Lesson' : 'Complete & Next')
+                                : (_isCompleted ? 'Finish Course' : 'Complete & Finish'),
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                           ),
-                        ),
                   ),
                 ),
               ],

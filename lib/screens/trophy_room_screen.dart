@@ -23,14 +23,22 @@ class _TrophyRoomScreenState extends State<TrophyRoomScreen> {
 
   Future<void> _loadCertificates() async {
     if (!FirestoreService().isLoggedIn) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
-    final certs = await FirestoreService().getEarnedCertificates();
-    setState(() {
-      _certificates = certs;
-      _isLoading = false;
-    });
+    try {
+      final certs = await FirestoreService()
+          .getEarnedCertificates()
+          .timeout(const Duration(seconds: 6), onTimeout: () => []);
+      if (mounted) {
+        setState(() {
+          _certificates = certs;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override

@@ -62,25 +62,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _loadProgress() async {
     final firestoreService = FirestoreService();
-    
+
     // Ensure we have the latest user data
     if (AuthService().currentUser != null) {
       await AuthService().currentUser!.reload();
     }
-    
+
     final Map<String, double> progress = {};
-    double totalProgress = 0;
     Course? continueCourse;
     double maxIncompleteProgress = -1;
+    double totalProgressOfEnrolled = 0;
+    int enrolledCount = 0;
 
     final isCloud = firestoreService.isLoggedIn;
+
+    // Get enrolled course IDs first
+    final enrolledIds = isCloud
+        ? await firestoreService.getEnrolledCourseIds()
+        : <String>[];
 
     for (final course in sampleCourses) {
       final p = isCloud
           ? await firestoreService.getCourseProgress(course.id, course.totalLessons)
           : await ProgressService.getCourseProgress(course.id, course.totalLessons);
       progress[course.id] = p;
-      totalProgress += p;
+
+      // Only count towards overall if enrolled or has progress
+      final isEnrolled = enrolledIds.contains(course.id) || p > 0;
+      if (isEnrolled) {
+        totalProgressOfEnrolled += p;
+        enrolledCount++;
+      }
 
       // Find highest progress course that is not 100% complete
       if (p > 0 && p < 1.0) {
@@ -90,6 +102,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       }
     }
+
+    final overallProgress = enrolledCount > 0
+        ? totalProgressOfEnrolled / enrolledCount
+        : 0.0;
 
     final stats = isCloud
         ? await firestoreService.getOverallStats(
@@ -104,7 +120,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final user = AuthService().currentUser;
     String name = 'Guest';
     if (user != null) {
-      // Re-fetch displayName after possible reload
       final displayName = user.displayName;
       if (displayName != null && displayName.isNotEmpty) {
         name = displayName;
@@ -119,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (mounted) {
       setState(() {
         _courseProgress = progress;
-        _overallProgress = sampleCourses.isEmpty ? 0 : totalProgress / sampleCourses.length;
+        _overallProgress = overallProgress;
         _overallStats = stats;
         _continueLearningCourse = continueCourse;
         _userName = name;
@@ -288,6 +303,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    if (hour < 20) return 'Good Evening';
+    return 'Good Night';
+  }
+
   List<Course> get _filteredCourses {
     var list = sampleCourses;
     if (_selectedCategory != 'All') {
@@ -381,9 +404,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  'Good Morning',
-                                  style: TextStyle(
+                                Text(
+                                  _greeting,
+                                  style: const TextStyle(
                                     color: Colors.white70,
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,

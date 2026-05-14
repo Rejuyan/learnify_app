@@ -352,8 +352,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
             ),
           ],
         ),
-        // ─── Continue Button ──────────────────────────
-        bottomNavigationBar: _firstIncompleteLessonIndex >= 0
+        // ─── Start / Continue Button ─────────────────
+        bottomNavigationBar: _isEnrolled
             ? Container(
                 padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
                 decoration: BoxDecoration(
@@ -375,20 +375,27 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
                         backgroundColor: widget.course.color,
                       ),
                       onPressed: () async {
+                        final lessonIndex = _firstIncompleteLessonIndex >= 0
+                            ? _firstIncompleteLessonIndex
+                            : 0; // If all complete, start from beginning
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => LessonScreen(
                               course: widget.course,
-                              lessonIndex: _firstIncompleteLessonIndex,
+                              lessonIndex: lessonIndex,
                             ),
                           ),
                         );
                         _loadProgress();
                       },
-                      child: const Text(
-                        'Continue Learning',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      child: Text(
+                        _completedLessons.isEmpty
+                            ? 'Start Learning'
+                            : _firstIncompleteLessonIndex >= 0
+                                ? 'Continue Learning'
+                                : 'Review Course',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
