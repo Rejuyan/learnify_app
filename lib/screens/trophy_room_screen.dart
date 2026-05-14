@@ -65,15 +65,47 @@ class _TrophyRoomScreenState extends State<TrophyRoomScreen> {
     final quiz = await _ds.getQuizScore(cert['courseId'] ?? '');
 
     if (!mounted) return;
+    try {
       // ignore: use_build_context_synchronously
-      await CertificatePdfService.shareOrDownload(
-      studentName: userName,
-      courseTitle: cert['courseTitle'] ?? 'Unknown Course',
-      score: quiz?['score'] ?? 1,
-      totalQuestions: quiz?['total'] ?? 1,
-      earnedDate: _formatDate(cert['earnedAt']),
-      context: context,
-    );
+      final savedPath = await CertificatePdfService.saveToDevice(
+        studentName: userName,
+        courseTitle: cert['courseTitle'] ?? 'Unknown Course',
+        score: quiz?['score'] ?? 1,
+        totalQuestions: quiz?['total'] ?? 1,
+        earnedDate: _formatDate(cert['earnedAt']),
+        context: context,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Certificate saved!\n$savedPath',
+                    style: const TextStyle(fontSize: 12),
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF2E7D32),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not save PDF: $e'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -296,12 +328,11 @@ class _DownloadButtonState extends State<_DownloadButton> {
               }
             },
       icon: _loading
-          ? const SizedBox(
-              width: 16, height: 16,
+          ? const SizedBox(width: 16, height: 16,
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white))
-          : const Icon(Icons.download_rounded, size: 18),
-      label: Text(_loading ? 'Generating PDF...' : 'Download Certificate (PDF)'),
+                  strokeWidth: 2, color: Color(0xFF1A1040)))
+          : const Icon(Icons.save_alt_rounded, size: 18),
+      label: Text(_loading ? 'Saving...' : 'Save Certificate to Device'),
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFFFFD93D),
         foregroundColor: const Color(0xFF1A1040),

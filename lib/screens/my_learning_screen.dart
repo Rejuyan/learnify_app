@@ -78,7 +78,7 @@ class _MyLearningScreenState extends State<MyLearningScreen> {
       ];
       final dateStr = '${months[now.month]} ${now.day}, ${now.year}';
 
-      await CertificatePdfService.shareOrDownload(
+      final savedPath = await CertificatePdfService.saveToDevice(
         studentName: _userName,
         courseTitle: course.title,
         score: quiz?['score'] ?? course.quizzes.length,
@@ -86,11 +86,32 @@ class _MyLearningScreenState extends State<MyLearningScreen> {
         earnedDate: dateStr,
         context: context,
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Certificate saved!\n$savedPath',
+                    style: const TextStyle(fontSize: 12),
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF2E7D32),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not generate PDF: $e'),
+            content: Text('Could not save PDF: $e'),
             backgroundColor: AppTheme.errorRed,
           ),
         );
@@ -262,9 +283,9 @@ class _MyLearningScreenState extends State<MyLearningScreen> {
                                   ? const SizedBox(width: 12, height: 12,
                                       child: CircularProgressIndicator(
                                           strokeWidth: 2, color: Color(0xFF1A1040)))
-                                  : const Icon(Icons.download_rounded, size: 14),
+                                  : const Icon(Icons.save_alt_rounded, size: 14),
                               label: Text(
-                                isDownloading ? 'Generating...' : 'Certificate PDF',
+                                isDownloading ? 'Saving...' : 'Save Certificate',
                                 style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                               ),
                               style: ElevatedButton.styleFrom(

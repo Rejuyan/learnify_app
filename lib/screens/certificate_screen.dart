@@ -101,7 +101,7 @@ class _CertificateScreenState extends State<CertificateScreen>
   Future<void> _downloadPdf() async {
     setState(() => _isDownloading = true);
     try {
-      await CertificatePdfService.shareOrDownload(
+      final savedPath = await CertificatePdfService.saveToDevice(
         studentName: _userName,
         courseTitle: widget.courseTitle,
         score: _quizScore?['score'] ?? 1,
@@ -109,11 +109,32 @@ class _CertificateScreenState extends State<CertificateScreen>
         earnedDate: _earnedDate,
         context: context,
       );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Certificate saved!\n$savedPath',
+                    style: const TextStyle(fontSize: 12),
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF2E7D32),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not generate PDF: $e'),
+            content: Text('Could not save PDF: $e'),
             backgroundColor: AppTheme.errorRed,
           ),
         );
@@ -123,22 +144,49 @@ class _CertificateScreenState extends State<CertificateScreen>
     }
   }
 
+  Future<void> _sharePdf() async {
+    await CertificatePdfService.shareViaSheet(
+      studentName: _userName,
+      courseTitle: widget.courseTitle,
+      score: _quizScore?['score'] ?? 1,
+      totalQuestions: _quizScore?['total'] ?? 1,
+      earnedDate: _earnedDate,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A1A),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _isDownloading ? null : _downloadPdf,
-        backgroundColor: const Color(0xFFFFD93D),
-        foregroundColor: const Color(0xFF1A1040),
-        icon: _isDownloading
-            ? const SizedBox(width: 20, height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1A1040)))
-            : const Icon(Icons.download_rounded),
-        label: Text(
-          _isDownloading ? 'Generating...' : 'Download PDF',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+      floatingActionButton: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Share button
+          FloatingActionButton(
+            heroTag: 'share_cert',
+            mini: true,
+            backgroundColor: Colors.white24,
+            onPressed: _sharePdf,
+            tooltip: 'Share Certificate',
+            child: const Icon(Icons.share_rounded, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          // Save to device button
+          FloatingActionButton.extended(
+            heroTag: 'download_cert',
+            onPressed: _isDownloading ? null : _downloadPdf,
+            backgroundColor: const Color(0xFFD4A01A),
+            foregroundColor: Colors.white,
+            icon: _isDownloading
+                ? const SizedBox(width: 20, height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.save_alt_rounded),
+            label: Text(
+              _isDownloading ? 'Saving...' : 'Save to Device',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+            ),
+          ),
+        ],
       ),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
