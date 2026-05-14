@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/firestore_service.dart';
-import '../services/auth_service.dart';
+import '../services/local_data_service.dart';
 import '../theme/app_theme.dart';
 import 'certificate_screen.dart';
 
@@ -15,6 +14,8 @@ class _TrophyRoomScreenState extends State<TrophyRoomScreen> {
   List<Map<String, dynamic>> _certificates = [];
   bool _isLoading = true;
 
+  final _ds = LocalDataService();
+
   @override
   void initState() {
     super.initState();
@@ -22,29 +23,18 @@ class _TrophyRoomScreenState extends State<TrophyRoomScreen> {
   }
 
   Future<void> _loadCertificates() async {
-    if (!FirestoreService().isLoggedIn) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-    try {
-      final certs = await FirestoreService()
-          .getEarnedCertificates()
-          .timeout(const Duration(seconds: 6), onTimeout: () => []);
-      if (mounted) {
-        setState(() {
-          _certificates = certs;
-          _isLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+    final certs = await _ds.getEarnedCertificates();
+    if (mounted) {
+      setState(() {
+        _certificates = certs;
+        _isLoading = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final user = AuthService().currentUser;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -60,31 +50,9 @@ class _TrophyRoomScreenState extends State<TrophyRoomScreen> {
                 fontSize: 20,
                 fontWeight: FontWeight.bold)),
       ),
-      body: user == null
-          ? _buildNotLoggedIn(context)
-          : _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _buildBody(context, isDark),
-    );
-  }
-
-  Widget _buildNotLoggedIn(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.lock_outline_rounded,
-                size: 64, color: AppTheme.textMuted),
-            const SizedBox(height: 16),
-            const Text('Log in to view your certificates',
-                textAlign: TextAlign.center,
-                style:
-                    TextStyle(fontSize: 18, color: AppTheme.textSecondary)),
-          ],
-        ),
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator(color: AppTheme.primaryPurple))
+          : _buildBody(context, isDark),
     );
   }
 
@@ -97,16 +65,13 @@ class _TrophyRoomScreenState extends State<TrophyRoomScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.emoji_events_rounded,
-                  size: 80,
-                  color: AppTheme.textMuted.withValues(alpha: 0.4)),
+                  size: 80, color: AppTheme.textMuted.withValues(alpha: 0.4)),
               const SizedBox(height: 20),
-              const Text(
-                'No Certificates Yet',
-                style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.textPrimary),
-              ),
+              const Text('No Certificates Yet',
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary)),
               const SizedBox(height: 8),
               const Text(
                 'Complete a course and pass the final quiz\nto earn your first certificate!',
@@ -157,22 +122,18 @@ class _TrophyRoomScreenState extends State<TrophyRoomScreen> {
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: const Color(0xFFFFD93D).withValues(alpha: 0.3),
-                ),
+                border: Border.all(color: const Color(0xFFFFD93D).withValues(alpha: 0.3)),
                 boxShadow: [
                   BoxShadow(
                     color: AppTheme.primaryPurple.withValues(alpha: 0.2),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+                    blurRadius: 12, offset: const Offset(0, 4),
                   ),
                 ],
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 56,
-                    height: 56,
+                    width: 56, height: 56,
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
@@ -190,23 +151,17 @@ class _TrophyRoomScreenState extends State<TrophyRoomScreen> {
                         Text(
                           cert['courseTitle'] ?? 'Unknown Course',
                           style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold),
+                              color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                         if (formattedDate.isNotEmpty) ...[
                           const SizedBox(height: 4),
-                          Text(
-                            'Earned on $formattedDate',
-                            style: const TextStyle(
-                                color: Colors.white54, fontSize: 12),
-                          ),
-                        ]
+                          Text('Earned on $formattedDate',
+                              style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                        ],
                       ],
                     ),
                   ),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: Color(0xFFFFD93D)),
+                  const Icon(Icons.chevron_right_rounded, color: Color(0xFFFFD93D)),
                 ],
               ),
             ),

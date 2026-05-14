@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../services/firestore_service.dart';
+import '../services/local_data_service.dart';
 import '../services/auth_service.dart';
 
 class CertificateScreen extends StatefulWidget {
@@ -70,7 +70,7 @@ class _CertificateScreenState extends State<CertificateScreen>
     _particleController.repeat();
 
     if (widget.isNewlyEarned) {
-      FirestoreService().awardCertificate(widget.courseId, widget.courseTitle);
+      LocalDataService().awardCertificate(widget.courseId, widget.courseTitle);
     }
   }
 

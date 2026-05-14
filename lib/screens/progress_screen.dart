@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/sample_data.dart';
-import '../services/progress_service.dart';
+import '../services/local_data_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/progress_indicator_widget.dart';
 
@@ -19,6 +19,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
   Map<String, Map<String, int>?> _quizScores = {};
   bool _loading = true;
 
+  final _ds = LocalDataService();
+
   @override
   void initState() {
     super.initState();
@@ -33,19 +35,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
   Future<void> _loadStats() async {
     final courseIds = sampleCourses.map((c) => c.id).toList();
-    final lessonCounts = {
-      for (final c in sampleCourses) c.id: c.totalLessons
-    };
-    final stats =
-        await ProgressService.getOverallStats(courseIds, lessonCounts);
+    final lessonCounts = {for (final c in sampleCourses) c.id: c.totalLessons};
+    final stats = await _ds.getOverallStats(courseIds, lessonCounts);
 
     final Map<String, double> progress = {};
     final Map<String, Map<String, int>?> quizScores = {};
     for (final course in sampleCourses) {
-      progress[course.id] = await ProgressService.getCourseProgress(
-          course.id, course.totalLessons);
-      quizScores[course.id] =
-          await ProgressService.getQuizScore(course.id);
+      progress[course.id] = await _ds.getCourseProgress(course.id, course.totalLessons);
+      quizScores[course.id] = await _ds.getQuizScore(course.id);
     }
 
     if (mounted) {
@@ -341,7 +338,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await ProgressService.resetAllProgress();
+              await _ds.resetAllProgress();
               _loadStats();
               widget.onRefresh?.call();
             },

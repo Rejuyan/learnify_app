@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
-import '../../services/firestore_service.dart';
-import '../../data/sample_data.dart';
 import '../../theme/app_theme.dart';
 import 'register_screen.dart';
-import 'verify_email_screen.dart';
 import '../home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -42,20 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      if (credential?.user != null && !credential!.user!.emailVerified) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const VerifyEmailScreen()),
-        );
-      } else {
-        // Initialize user document (with timeout so it never hangs)
-        try {
-          await FirestoreService().initUserDocument(
-            migrateCourseIds: sampleCourses.map((c) => c.id).toList(),
-          ).timeout(const Duration(seconds: 5));
-        } catch (_) {}
-        
-        if (!mounted) return;
+      if (credential?.user != null) {
         // Navigate to HomeScreen, clearing the entire back stack
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const HomeScreen()),
@@ -67,11 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
       });
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -94,30 +74,18 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 40),
-              const Icon(
-                Icons.lock_person_rounded,
-                size: 80,
-                color: AppTheme.primaryPurple,
-              ),
+              const Icon(Icons.lock_person_rounded,
+                  size: 80, color: AppTheme.primaryPurple),
               const SizedBox(height: 24),
-              const Text(
-                'Welcome Back',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.textPrimary,
-                ),
-                textAlign: TextAlign.center,
-              ),
+              const Text('Welcome Back',
+                  style: TextStyle(
+                      fontSize: 28, fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary),
+                  textAlign: TextAlign.center),
               const SizedBox(height: 8),
-              const Text(
-                'Log in to access quizzes and track your progress.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: AppTheme.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
+              const Text('Log in to access quizzes and track your progress.',
+                  style: TextStyle(fontSize: 16, color: AppTheme.textSecondary),
+                  textAlign: TextAlign.center),
               const SizedBox(height: 40),
               if (_errorMessage != null)
                 Container(
@@ -128,10 +96,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.red.shade200),
                   ),
-                  child: Text(
-                    _errorMessage!,
-                    style: TextStyle(color: Colors.red.shade700),
-                  ),
+                  child: Text(_errorMessage!,
+                      style: TextStyle(color: Colors.red.shade700)),
                 ),
               TextField(
                 controller: _emailController,
@@ -139,9 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: InputDecoration(
                   labelText: 'Email',
                   prefixIcon: const Icon(Icons.email_outlined),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
               const SizedBox(height: 16),
@@ -151,9 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: InputDecoration(
                   labelText: 'Password',
                   prefixIcon: const Icon(Icons.lock_outline),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
               const SizedBox(height: 32),
@@ -163,52 +125,29 @@ class _LoginScreenState extends State<LoginScreen> {
                   backgroundColor: AppTheme.primaryPurple,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   elevation: 0,
                 ),
                 child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text(
-                        'Log In',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    ? const SizedBox(height: 20, width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text('Log In',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
-                    'Don\'t have an account? ',
-                    style: TextStyle(color: AppTheme.textSecondary),
-                  ),
+                  const Text('Don\'t have an account? ',
+                      style: TextStyle(color: AppTheme.textSecondary)),
                   TextButton(
                     onPressed: () {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const RegisterScreen(),
-                        ),
-                      );
+                      Navigator.pushReplacement(context,
+                          MaterialPageRoute(builder: (_) => const RegisterScreen()));
                     },
-                    child: const Text(
-                      'Register',
-                      style: TextStyle(
-                        color: AppTheme.primaryPurple,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    child: const Text('Register',
+                        style: TextStyle(
+                            color: AppTheme.primaryPurple, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),

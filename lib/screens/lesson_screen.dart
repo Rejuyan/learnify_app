@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/course.dart';
-import '../services/progress_service.dart';
+import '../services/local_data_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/quiz_option.dart';
 import '../services/auth_service.dart';
-import '../services/firestore_service.dart';
 import 'auth/login_screen.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
@@ -31,12 +30,12 @@ class _LessonScreenState extends State<LessonScreen>
   bool _isSaving = false;
   late AnimationController _animController;
 
-  // Quiz state
   final Map<int, int?> _selectedOptions = {};
   final Map<int, bool> _showResults = {};
 
-  // Video state
   YoutubePlayerController? _youtubeController;
+
+  final _ds = LocalDataService();
 
   @override
   void initState() {
@@ -75,56 +74,34 @@ class _LessonScreenState extends State<LessonScreen>
     });
 
     final lesson = widget.course.lessons[_currentIndex];
-    final isCloud = FirestoreService().isLoggedIn;
+    final completed = await _ds.getCompletedLessons(widget.course.id);
+    final isDone = completed.contains(lesson.id);
 
-    try {
-      List<String> completed;
-      if (isCloud) {
-        completed = await FirestoreService()
-            .getCompletedLessons(widget.course.id)
-            .timeout(const Duration(seconds: 5), onTimeout: () => []);
-      } else {
-        completed = await ProgressService.getCompletedLessons(widget.course.id);
-      }
-
-      final isDone = completed.contains(lesson.id);
-
-      if (mounted) {
-        setState(() {
-          _isCompleted = isDone;
-          _isLoadingStatus = false;
-          // If already done, fill in correct answers visually
-          if (isDone && lesson.quizzes != null) {
-            for (int i = 0; i < lesson.quizzes!.length; i++) {
-              _selectedOptions[i] = lesson.quizzes![i].correctIndex;
-              _showResults[i] = true;
-            }
+    if (mounted) {
+      setState(() {
+        _isCompleted = isDone;
+        _isLoadingStatus = false;
+        if (isDone && lesson.quizzes != null) {
+          for (int i = 0; i < lesson.quizzes!.length; i++) {
+            _selectedOptions[i] = lesson.quizzes![i].correctIndex;
+            _showResults[i] = true;
           }
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _isLoadingStatus = false);
+        }
+      });
     }
   }
 
   Future<void> _markComplete() async {
     if (_isSaving) return;
     final lesson = widget.course.lessons[_currentIndex];
-    final isCloud = FirestoreService().isLoggedIn;
-
     setState(() {
       _isSaving = true;
-      _isCompleted = true; // Optimistic update
+      _isCompleted = true;
     });
-
     try {
-      if (isCloud) {
-        await FirestoreService().markLessonComplete(widget.course.id, lesson.id);
-      } else {
-        await ProgressService.markLessonComplete(widget.course.id, lesson.id);
-      }
+      await _ds.markLessonComplete(widget.course.id, lesson.id);
     } catch (_) {
-      if (mounted) setState(() => _isCompleted = false); // revert on error
+      if (mounted) setState(() => _isCompleted = false);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -133,21 +110,14 @@ class _LessonScreenState extends State<LessonScreen>
   Future<void> _markIncomplete() async {
     if (_isSaving) return;
     final lesson = widget.course.lessons[_currentIndex];
-    final isCloud = FirestoreService().isLoggedIn;
-
     setState(() {
       _isSaving = true;
-      _isCompleted = false; // Optimistic update
+      _isCompleted = false;
     });
-
     try {
-      if (isCloud) {
-        await FirestoreService().markLessonIncomplete(widget.course.id, lesson.id);
-      } else {
-        await ProgressService.markLessonIncomplete(widget.course.id, lesson.id);
-      }
+      await _ds.markLessonIncomplete(widget.course.id, lesson.id);
     } catch (_) {
-      if (mounted) setState(() => _isCompleted = true); // revert on error
+      if (mounted) setState(() => _isCompleted = true);
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -156,7 +126,6 @@ class _LessonScreenState extends State<LessonScreen>
   void _goToLesson(int index) {
     _youtubeController?.dispose();
     _youtubeController = null;
-
     setState(() {
       _currentIndex = index;
       _selectedOptions.clear();
@@ -166,7 +135,6 @@ class _LessonScreenState extends State<LessonScreen>
       _animController.reset();
       _animController.forward();
     });
-
     _initYoutubePlayer();
     _checkCompletion();
   }
@@ -181,11 +149,8 @@ class _LessonScreenState extends State<LessonScreen>
   }
 
   void _selectQuizOption(int quizIndex, int optionIndex) {
-    // Don't allow changing answers after all quizzes are passed
     if (_isCompleted) return;
-    // Don't allow changing answer after showing result for this question
     if (_showResults[quizIndex] == true) return;
-
     setState(() {
       _selectedOptions[quizIndex] = optionIndex;
       _showResults[quizIndex] = true;
@@ -197,7 +162,7 @@ class _LessonScreenState extends State<LessonScreen>
     final noteController = TextEditingController();
     bool isSaving = false;
 
-    FirestoreService().getNote(lesson.id).then((existing) {
+    _ds.getNote(lesson.id).then((existing) {
       if (existing != null && noteController.text.isEmpty) {
         noteController.text = existing;
       }
@@ -267,7 +232,7 @@ class _LessonScreenState extends State<LessonScreen>
                           ? null
                           : () async {
                               setModalState(() => isSaving = true);
-                              await FirestoreService().saveNote(lesson.id, noteController.text);
+                              await _ds.saveNote(lesson.id, noteController.text);
                               setModalState(() => isSaving = false);
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -305,7 +270,7 @@ class _LessonScreenState extends State<LessonScreen>
       value: SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: AppTheme.backgroundLight,
-        floatingActionButton: FirestoreService().isLoggedIn
+        floatingActionButton: AuthService().currentUser != null
             ? FloatingActionButton.small(
                 backgroundColor: AppTheme.primaryPurple,
                 onPressed: () => _showNotesSheet(context),
@@ -327,7 +292,6 @@ class _LessonScreenState extends State<LessonScreen>
             ),
           ),
           actions: [
-            // Toggle completion icon button in app bar
             if (!_isLoadingStatus)
               IconButton(
                 icon: Icon(
@@ -340,11 +304,6 @@ class _LessonScreenState extends State<LessonScreen>
                         if (_isCompleted) {
                           await _markIncomplete();
                         } else {
-                          if (AuthService().currentUser == null) {
-                            await Navigator.push(context,
-                                MaterialPageRoute(builder: (_) => const LoginScreen()));
-                            return;
-                          }
                           await _markComplete();
                         }
                       },
@@ -354,15 +313,12 @@ class _LessonScreenState extends State<LessonScreen>
         ),
         body: Column(
           children: [
-            // Progress bar showing position within course
             LinearProgressIndicator(
               value: lessonProgress,
               backgroundColor: AppTheme.divider,
               valueColor: AlwaysStoppedAnimation<Color>(widget.course.color),
               minHeight: 3,
             ),
-
-            // Lesson content
             Expanded(
               child: FadeTransition(
                 opacity: _animController,
@@ -376,7 +332,6 @@ class _LessonScreenState extends State<LessonScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Lesson title
                         Text(lesson.title, style: Theme.of(context).textTheme.headlineMedium),
                         const SizedBox(height: 8),
                         Row(
@@ -406,7 +361,6 @@ class _LessonScreenState extends State<LessonScreen>
                         const Divider(color: AppTheme.divider, height: 1),
                         const SizedBox(height: 24),
 
-                        // Video Player
                         if (_youtubeController != null) ...[
                           ClipRRect(
                             borderRadius: BorderRadius.circular(16),
@@ -422,7 +376,6 @@ class _LessonScreenState extends State<LessonScreen>
                           const SizedBox(height: 24),
                         ],
 
-                        // Lesson content card
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(20),
@@ -431,7 +384,6 @@ class _LessonScreenState extends State<LessonScreen>
                               style: Theme.of(context).textTheme.bodyLarge),
                         ),
 
-                        // Lesson Quizzes
                         if (lesson.quizzes != null && lesson.quizzes!.isNotEmpty) ...[
                           const SizedBox(height: 32),
                           Text('Lesson Quiz', style: Theme.of(context).textTheme.headlineSmall),
@@ -480,7 +432,6 @@ class _LessonScreenState extends State<LessonScreen>
                             );
                           }),
                         ],
-
                         const SizedBox(height: 40),
                       ],
                     ),
@@ -490,7 +441,6 @@ class _LessonScreenState extends State<LessonScreen>
             ),
           ],
         ),
-
         bottomNavigationBar: Container(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
           decoration: BoxDecoration(
@@ -505,7 +455,6 @@ class _LessonScreenState extends State<LessonScreen>
           child: SafeArea(
             child: Row(
               children: [
-                // Previous button
                 if (_currentIndex > 0)
                   Expanded(
                     child: OutlinedButton.icon(
@@ -522,10 +471,7 @@ class _LessonScreenState extends State<LessonScreen>
                   )
                 else
                   const Spacer(),
-
                 const SizedBox(width: 12),
-
-                // Complete & Next button
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
@@ -537,16 +483,13 @@ class _LessonScreenState extends State<LessonScreen>
                     onPressed: (_isLoadingStatus || _isSaving)
                         ? null
                         : () async {
-                            // If not yet completed, try to mark complete first
                             if (!_isCompleted) {
-                              // Must be logged in
+                              // Need to be logged in
                               if (AuthService().currentUser == null) {
                                 await Navigator.push(context,
                                     MaterialPageRoute(builder: (_) => const LoginScreen()));
                                 return;
                               }
-
-                              // Check if quizzes are all passed
                               if (!_allQuizzesPassed) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
@@ -556,13 +499,10 @@ class _LessonScreenState extends State<LessonScreen>
                                 );
                                 return;
                               }
-
-                              // Mark complete
                               await _markComplete();
                             }
-
-                            // Navigate to next lesson or finish
                             if (!mounted) return;
+                            // ignore: use_build_context_synchronously
                             if (_currentIndex < totalLessons - 1) {
                               _goToLesson(_currentIndex + 1);
                             } else {
