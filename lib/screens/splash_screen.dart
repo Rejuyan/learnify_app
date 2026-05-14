@@ -67,14 +67,18 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
   Future<void> _navigateToNext() async {
     if (!mounted) return;
-    
+
     final user = AuthService().currentUser;
     if (user != null) {
-      // Initialize/Migrate user data
-      await FirestoreService().initUserDocument(
-        migrateCourseIds: sampleCourses.map((c) => c.id).toList(),
-      );
-      
+      // Initialize/Migrate user data — with timeout so it never blocks the splash
+      try {
+        await FirestoreService().initUserDocument(
+          migrateCourseIds: sampleCourses.map((c) => c.id).toList(),
+        ).timeout(const Duration(seconds: 5));
+      } catch (_) {
+        // Proceed even if this fails (offline / slow network)
+      }
+
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const HomeScreen()),

@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
+import '../../services/firestore_service.dart';
+import '../../data/sample_data.dart';
 import '../../theme/app_theme.dart';
 import 'register_screen.dart';
 import 'verify_email_screen.dart';
+import '../home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,14 +43,24 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (credential?.user != null && !credential!.user!.emailVerified) {
-        // Redirect to verify email screen if not verified
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (context) => const VerifyEmailScreen()),
         );
       } else {
-        // Success, pop back to wherever they came from
-        Navigator.pop(context, true);
+        // Initialize user document (with timeout so it never hangs)
+        try {
+          await FirestoreService().initUserDocument(
+            migrateCourseIds: sampleCourses.map((c) => c.id).toList(),
+          ).timeout(const Duration(seconds: 5));
+        } catch (_) {}
+        
+        if (!mounted) return;
+        // Navigate to HomeScreen, clearing the entire back stack
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
       }
     } catch (e) {
       setState(() {
