@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/local_data_service.dart';
 import '../services/auth_service.dart';
+import '../services/certificate_pdf_service.dart';
 
 class CertificateScreen extends StatefulWidget {
   final String courseTitle;
@@ -32,6 +33,8 @@ class _CertificateScreenState extends State<CertificateScreen>
 
   String _userName = '';
   String _earnedDate = '';
+  bool _isDownloading = false;
+  Map<String, int>? _quizScore;
 
   @override
   void initState() {
@@ -69,6 +72,11 @@ class _CertificateScreenState extends State<CertificateScreen>
     _shimmerController.repeat();
     _particleController.repeat();
 
+    // Load quiz score for efficiency calculation
+    LocalDataService().getQuizScore(widget.courseId).then((q) {
+      if (mounted) setState(() => _quizScore = q);
+    });
+
     if (widget.isNewlyEarned) {
       LocalDataService().awardCertificate(widget.courseId, widget.courseTitle);
     }
@@ -90,10 +98,48 @@ class _CertificateScreenState extends State<CertificateScreen>
     return months[month];
   }
 
+  Future<void> _downloadPdf() async {
+    setState(() => _isDownloading = true);
+    try {
+      await CertificatePdfService.shareOrDownload(
+        studentName: _userName,
+        courseTitle: widget.courseTitle,
+        score: _quizScore?['score'] ?? 1,
+        totalQuestions: _quizScore?['total'] ?? 1,
+        earnedDate: _earnedDate,
+        context: context,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not generate PDF: $e'),
+            backgroundColor: AppTheme.errorRed,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDownloading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A1A),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _isDownloading ? null : _downloadPdf,
+        backgroundColor: const Color(0xFFFFD93D),
+        foregroundColor: const Color(0xFF1A1040),
+        icon: _isDownloading
+            ? const SizedBox(width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1A1040)))
+            : const Icon(Icons.download_rounded),
+        label: Text(
+          _isDownloading ? 'Generating...' : 'Download PDF',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         leading: IconButton(
